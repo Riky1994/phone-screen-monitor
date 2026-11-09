@@ -300,7 +300,7 @@ class BackgroundPoller(threading.Thread):
             return self._data
 
 
-def make_top_reader(n: int = 5):
+def make_top_reader(n: int = 8):
     """进程 TOP（按整机 CPU 占比排序）。
 
     优先用一次内核查询（fastproc）：逐进程 OpenProcess 在本机被安全软件拖慢到
@@ -309,6 +309,8 @@ def make_top_reader(n: int = 5):
     """
     ncpu = psutil.cpu_count(logical=True) or 1
     state = {"prev": {}, "t": time.time()}
+    # System / Registry / 内存压缩 这类没有普通进程语义，列表里没意义
+    skip_names = {"system", "idle", "registry", "memory compression", "memcompression", "secure system"}
 
     def via_fastproc():
         rows = fastproc.list_processes()
@@ -320,12 +322,15 @@ def make_top_reader(n: int = 5):
         out = []
         for r in rows:
             pid = r["pid"]
+            name = r["name"] or "?"
             secs = r["cpu"] / 1e7  # 100ns -> 秒
             cur[pid] = secs
+            if pid <= 4 or name.lower() in skip_names:
+                continue
             before = prev.get(pid)
             share = 0.0 if before is None else (secs - before) / dt / ncpu * 100.0
             out.append({
-                "name": r["name"] or "?",
+                "name": name,
                 "pid": pid,
                 "cpu": round(max(0.0, share), 2),
                 "mem": r["ws"],
@@ -395,7 +400,7 @@ class Sampler:
         self._net_down = 0
         self._net_up = 0
         self._gpu = BackgroundPoller(read_gpu, 1.0, "gpu")
-        self._procs = BackgroundPoller(make_top_reader(5), 2.0, "procs")
+        self._procs = BackgroundPoller(make_top_reader(8), 2.0, "procs")
         self._batt = BackgroundPoller(read_battery, 10.0, "batt")
         self._weather = BackgroundPoller(read_weather, 60.0, "weather")
         self._fps = BackgroundPoller(read_fps, 1.0, "fps")
