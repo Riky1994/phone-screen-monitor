@@ -98,11 +98,26 @@
 
 CPU 温度与帧率显示 `—` 是正常的：Windows 不对外开放 CPU 温度，也没有全局帧率接口，两者都需要额外工具。
 
-### 想看到 CPU 温度？（可选）
+### 补上 CPU 温度 / 帧率（两个一键脚本）
 
-1. 下载 [LibreHardwareMonitor](https://github.com/LibreHardwareMonitor/LibreHardwareMonitor/releases)（开源，选 `LibreHardwareMonitor.zip`），解压后以**管理员身份**运行
-2. 在它的菜单里打开 **Options → Remote Web Server → Run**（记住端口，默认 8085）
-3. 回到看板页面刷新一下，CPU 温度和功耗就会自动出现（看板会自己去读 `http://127.0.0.1:8085/data.json`）
+看板里 **CPU 温度** 和 **帧率** 默认显示 `—`，因为 Windows 本身不提供这两项。项目里带了两个脚本：
+
+**`启用CPU温度.bat`**
+1. 双击运行 → 弹出 UAC，点「是」
+2. 脚本会自动下载 LibreHardwareMonitor（约 6MB，已内置则跳过）并以管理员身份启动
+3. 首次需要在它的菜单里点一次 **Options → Remote Web Server → Run**
+4. 脚本会自己轮询 8085 端口，接通后提示成功——回到看板刷新即可
+
+> 只需设置一次，LHM 会记住。之后保持它在后台（可最小化到托盘）就有温度。
+> 因为加载传感器驱动必须提权，这一步的 UAC 无法省略。
+
+**`启用帧率FPS.bat`**
+1. 双击运行 → 浏览器打开 MSI Afterburner 官方下载页（MSI 禁止程序自动下载，只能手动下）
+2. 安装时**务必勾选 RivaTuner Statistics Server**
+3. 让 RTSS 常驻后台（托盘粉色小图标），脚本会自动检测到并提示接通
+4. 进游戏后看板第 2 页就会显示 FPS
+
+> 帧率不是系统接口，只能由 RTSS 这类工具写进共享内存，看板从那里读取。
 
 不需要的话忽略即可，其它指标都能正常用。
 

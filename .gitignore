@@ -1,6 +1,7 @@
-﻿logs/
+logs/
 __pycache__/
 address.txt
 qr.png
 qr.svg
 *.pyc
+tools/LibreHardwareMonitor/
