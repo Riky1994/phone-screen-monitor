@@ -1,0 +1,1118 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,maximum-scale=1">
+<meta name="theme-color" content="#05070b">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="boost-token" content="__BOOST_TOKEN__">
+<title>性能看板</title>
+<script>
+/* 在首帧前就定好横竖屏布局，避免出现一次闪跳 */
+(function () {
+  try {
+    var m = localStorage.getItem("pd_orient") || "auto";
+    var vw = window.innerWidth, vh = window.innerHeight, rot = 0, wide;
+    if (m === "landscape") { wide = true; if (vh > vw) rot = 90; }
+    else if (m === "portrait") { wide = false; if (vw > vh) rot = -90; }
+    else { wide = vw > vh * 1.02; }
+    var r = document.documentElement;
+    r.setAttribute("data-layout", wide ? "wide" : "tall");
+    if (rot) r.setAttribute("data-rotate", String(rot));
+    r.setAttribute("data-theme", localStorage.getItem("pd_theme") || "space");
+  } catch (e) {}
+})();
+</script>
+<style>
+  :root{
+    --txt:#e9eff8;
+    --dim:#7d8da3;
+    --dim2:#55637a;
+    --line:rgba(255,255,255,.075);
+    --cyan:#2ee6ff;
+    --green:#6ef2a4;
+    --amber:#ffb35c;
+    --violet:#b48cff;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;min-height:100%}
+  body{
+    background-color:#05070b;
+    background-image:
+      radial-gradient(900px 420px at 85% -8%, rgba(46,230,255,.10), transparent 62%),
+      radial-gradient(700px 420px at -10% 108%, rgba(180,140,255,.09), transparent 60%);
+    background-attachment:fixed;
+    color:var(--txt);
+    font:15px/1.35 -apple-system,"Segoe UI Variable Text","Segoe UI",system-ui,"PingFang SC","Microsoft YaHei",sans-serif;
+    overscroll-behavior:none;
+    -webkit-font-smoothing:antialiased;
+  }
+  html[data-rotate] body{overflow:hidden}
+
+  /* ---------- 旋转框架 ---------- */
+  .rotator{
+    min-height:100vh;
+    min-height:100dvh;
+    padding:calc(env(safe-area-inset-top) + 9px) 12px calc(env(safe-area-inset-bottom) + 16px);
+    overflow-x:hidden;
+  }
+  html[data-rotate] .rotator{
+    position:fixed;top:50%;left:50%;
+    width:100vh;height:100vw;
+    width:100dvh;height:100dvw;
+    min-height:0;
+    padding:9px 12px 14px;
+    overflow-y:auto;overflow-x:hidden;
+    -webkit-overflow-scrolling:touch;
+    transform-origin:center center;
+  }
+  html[data-rotate="90"] .rotator{transform:translate(-50%,-50%) rotate(90deg)}
+  html[data-rotate="-90"] .rotator{transform:translate(-50%,-50%) rotate(-90deg)}
+
+  /* ---------- 栅格 ---------- */
+  .wrap{
+    max-width:540px;margin:0 auto;
+    display:grid;gap:10px;
+    grid-template-columns:minmax(0,1fr) minmax(0,1fr);
+    grid-template-areas:
+      "hdr  hdr"
+      "cpu  cpu"
+      "gpu  mem"
+      "disk net"
+      "chart chart"
+      "proc proc";
+    align-content:start;
+    align-items:stretch;
+  }
+  html[data-layout="wide"] .wrap{
+    max-width:1120px;
+    grid-template-columns:1.1fr 1fr 1fr 1.1fr;
+    grid-template-areas:
+      "hdr   hdr   hdr   hdr"
+      "cpu   gpu   disk  proc"
+      "cpu   mem   net   proc"
+      "chart chart chart chart";
+    gap:8px;
+    align-content:stretch;
+  }
+  .card-cpu{grid-area:cpu}
+  .card-gpu{grid-area:gpu}
+  .card-mem{grid-area:mem}
+  .card-disk{grid-area:disk}
+  .card-net{grid-area:net}
+  .card-chart{grid-area:chart}
+  .card-proc{grid-area:proc}
+
+  /* ---------- 顶栏 ---------- */
+  .hdr{grid-area:hdr;display:flex;align-items:center;justify-content:space-between;padding:0 3px 1px;gap:8px}
+  .hdr-l{display:flex;align-items:center;gap:7px;min-width:0}
+  .live{width:7px;height:7px;border-radius:50%;background:var(--green);box-shadow:0 0 9px var(--green);flex:none;transition:.3s}
+  .live.off{background:#ff5d6c;box-shadow:0 0 9px #ff5d6c}
+  .host{font-size:13px;font-weight:650;letter-spacing:.09em;white-space:nowrap}
+  .uptime{font-size:11px;color:var(--dim2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .hdr-r{display:flex;align-items:center;gap:8px;flex:none}
+  .clock{font-size:13.5px;color:#a9b8ca;font-variant-numeric:tabular-nums;letter-spacing:.04em}
+  .icon{
+    width:28px;height:28px;border-radius:9px;border:1px solid var(--line);
+    background:rgba(255,255,255,.04);color:#93a3b8;font-size:13px;line-height:1;
+    display:grid;place-items:center;padding:0;cursor:pointer;
+  }
+  .mode-btn{
+    height:26px;min-width:40px;padding:0 8px;border-radius:9px;
+    border:1px solid var(--line);background:rgba(255,255,255,.04);
+    color:#9fb0c4;font-size:10.5px;font-family:inherit;line-height:1;cursor:pointer;
+    font-variant-numeric:tabular-nums;
+  }
+  .mode-btn:active,.icon:active{background:rgba(255,255,255,.13)}
+  .boost-btn{
+    height:26px;padding:0 9px;border-radius:9px;cursor:pointer;white-space:nowrap;
+    border:1px solid var(--line);background:rgba(255,255,255,.05);
+    color:var(--cyan);font-size:10.5px;font-family:inherit;line-height:1;
+    transition:.2s;
+  }
+  .boost-btn:active{background:rgba(255,255,255,.13)}
+  .boost-btn.busy{color:var(--amber);border-color:var(--amber)}
+  .boost-btn:disabled{opacity:.5;cursor:default}
+
+  /* ---------- 卡片 ---------- */
+  .card{
+    position:relative;overflow:hidden;
+    background:linear-gradient(158deg,rgba(255,255,255,.058),rgba(255,255,255,.016));
+    border:1px solid var(--line);
+    border-radius:20px;
+    padding:12px 15px 13px;
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.045),0 14px 34px -22px rgba(0,0,0,.95);
+    min-width:0;
+  }
+  .lbl{
+    display:flex;align-items:baseline;gap:7px;
+    font-size:11px;font-weight:600;letter-spacing:.15em;text-transform:uppercase;color:var(--dim);
+  }
+  .sub{font-size:10.5px;font-weight:400;letter-spacing:0;text-transform:none;color:var(--dim2);
+       overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;flex:1}
+  .big{display:flex;align-items:baseline;gap:3px;margin-top:5px}
+  .big b{font-size:clamp(32px,9.6vw,40px);font-weight:650;letter-spacing:-.035em;line-height:1.05;
+         font-variant-numeric:tabular-nums}
+  .big i{font-style:normal;font-size:13px;font-weight:600;color:var(--dim)}
+  .fine{display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin-top:6px;
+        font-size:11px;color:var(--dim2);font-variant-numeric:tabular-nums}
+  .fine b{color:#93a3b8;font-weight:600}
+
+  /* ---------- CPU ---------- */
+  .hero-main{display:flex;align-items:center;gap:6px;margin-top:7px}
+  .ring{position:relative;width:116px;height:116px;flex:none}
+  .ring svg{width:100%;height:100%;transform:rotate(-90deg)}
+  .ring-bg{fill:none;stroke:rgba(255,255,255,.065);stroke-width:8.5}
+  .ring-fg{fill:none;stroke-width:8.5;stroke-linecap:round;
+    stroke-dasharray:339.29;stroke-dashoffset:339.29;
+    transition:stroke-dashoffset .55s linear;
+    filter:drop-shadow(0 0 7px rgba(46,230,255,.42));}
+  .ring-num{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;gap:2px}
+  .ring-num b{font-size:34px;font-weight:650;letter-spacing:-.04em;font-variant-numeric:tabular-nums;line-height:1}
+  .ring-num i{font-style:normal;font-size:11.5px;color:var(--dim);font-weight:600;line-height:1;position:relative;top:-1px}
+  .hero-stats{flex:1;min-width:0;display:flex;flex-direction:column;gap:9px;padding-left:2px}
+  .st{display:flex;align-items:baseline;justify-content:space-between;gap:6px;
+      border-bottom:1px dashed rgba(255,255,255,.055);padding-bottom:6px}
+  .st:last-child{border-bottom:0;padding-bottom:0}
+  .st span{font-size:11px;color:var(--dim2);white-space:nowrap}
+  .st b{font-size:14px;font-weight:600;font-variant-numeric:tabular-nums;color:#dbe7f5;white-space:nowrap}
+  .st b.na{color:#4a566a}
+  .cores{display:flex;gap:3px;align-items:flex-end;height:20px;margin-top:11px}
+  .core{flex:1;height:100%;background:rgba(255,255,255,.055);border-radius:2px;position:relative;overflow:hidden}
+  .core i{position:absolute;left:0;right:0;bottom:0;height:0;border-radius:2px;
+    background:linear-gradient(180deg,#2ee6ff,#5f8bff);transition:height .5s linear}
+  .core.hot i{background:linear-gradient(180deg,#ffb35c,#ff7a59)}
+
+  /* ---------- 进度条 ---------- */
+  .track{height:5px;border-radius:99px;background:rgba(255,255,255,.07);overflow:hidden;margin-top:9px}
+  .fill{height:100%;width:0;border-radius:99px;transition:width .5s linear}
+  .fill.gpu{background:linear-gradient(90deg,#2fbf78,var(--green));box-shadow:0 0 10px rgba(110,242,164,.35)}
+  .fill.mem{background:linear-gradient(90deg,#f08a2e,var(--amber));box-shadow:0 0 10px rgba(255,179,92,.3)}
+  .fill.disk{background:linear-gradient(90deg,#8b5cf6,var(--violet))}
+
+  .mini{display:flex;gap:14px;margin-top:8px}
+  .mini .st{border:0;padding:0;flex:1;flex-direction:column;align-items:flex-start;gap:1px}
+  .mini .st span{font-size:10px;color:var(--dim2)}
+  .mini .st b{font-size:15px}
+
+  /* ---------- 网络 ---------- */
+  .netrows{display:flex;flex-direction:column;gap:7px;margin-top:9px}
+  .netrow{display:flex;align-items:baseline;gap:6px}
+  .arw{font-size:14px;font-weight:700;line-height:1;width:14px;flex:none}
+  .arw.d{color:var(--cyan)}
+  .arw.u{color:var(--amber)}
+  .netrow b{font-size:19px;font-weight:650;font-variant-numeric:tabular-nums;letter-spacing:-.02em}
+  .netrow i{font-style:normal;font-size:10.5px;color:var(--dim2)}
+
+  /* ---------- 磁盘 ---------- */
+  .pills{display:flex;flex-wrap:wrap;gap:4px;margin-top:9px}
+  .pill{font-size:10px;padding:2.5px 6px;border-radius:6px;background:rgba(255,255,255,.05);
+        color:#8394a9;font-variant-numeric:tabular-nums;border:1px solid rgba(255,255,255,.045)}
+  .pill.warm{color:#e6b57a;background:rgba(255,179,92,.09);border-color:rgba(255,179,92,.14)}
+  .pill.hot{color:#ff8f9a;background:rgba(255,93,108,.1);border-color:rgba(255,93,108,.16)}
+  .io{margin-top:7px;font-size:10px;color:var(--dim2);font-variant-numeric:tabular-nums;white-space:nowrap;
+      overflow:hidden;text-overflow:ellipsis}
+
+  /* ---------- 趋势图 ---------- */
+  .legend{display:flex;align-items:center;gap:9px;margin-left:auto;font-size:10px;color:var(--dim2);
+          text-transform:none;letter-spacing:0}
+  .legend em{font-style:normal;display:flex;align-items:center;gap:3px}
+  .legend i{width:6px;height:6px;border-radius:50%;display:block}
+  .legend .c{background:var(--cyan);box-shadow:0 0 6px rgba(46,230,255,.7)}
+  .legend .g{background:var(--green);box-shadow:0 0 6px rgba(110,242,164,.6)}
+  .legend .m{background:var(--amber);box-shadow:0 0 6px rgba(255,179,92,.6)}
+  #chart{width:100%;height:98px;display:block;margin-top:8px}
+
+  /* ---------- 进程 ---------- */
+  .procs{display:flex;flex-direction:column;gap:5px;margin-top:9px}
+  .proc{display:grid;grid-template-columns:minmax(0,1fr) 54px 46px;gap:8px;align-items:center;font-size:12px}
+  .proc .n{color:#c4d2e3;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .proc .v{color:var(--dim2);text-align:right;font-variant-numeric:tabular-nums;font-size:11px}
+  .proc .c{color:var(--cyan);text-align:right;font-variant-numeric:tabular-nums;font-weight:600}
+  .proc.ghost .c{color:var(--dim2)}
+
+  /* ---------- 横屏紧凑化：一屏放下全部卡片 ---------- */
+  html[data-layout="wide"] .card{padding:9px 12px 10px;border-radius:16px}
+  html[data-layout="wide"] .lbl{font-size:10px;gap:5px}
+  html[data-layout="wide"] .big b{font-size:30px}
+  html[data-layout="wide"] .big{margin-top:2px}
+  html[data-layout="wide"] .ring{width:112px;height:112px}
+  html[data-layout="wide"] .ring-num b{font-size:30px}
+  html[data-layout="wide"] .cores{height:20px;margin-top:9px}
+  html[data-layout="wide"] #chart{height:clamp(46px,calc(var(--eh,400px) * .16),74px);margin-top:6px}
+  html[data-layout="wide"] .track{margin-top:7px}
+  html[data-layout="wide"] .fine{margin-top:5px;font-size:10.5px}
+
+  /* CPU 卡片占两行，内容垂直居中 */
+  html[data-layout="wide"] .card-cpu{display:flex;flex-direction:column;justify-content:center}
+  html[data-layout="wide"] .card-cpu .hero-main{margin-top:8px}
+
+  /* GPU：大数字和温度/功耗并排，省掉一整行 */
+  html[data-layout="wide"] .card-gpu{
+    display:grid;grid-template-columns:auto 1fr;column-gap:10px;
+    grid-template-areas:"lbl lbl" "big mini" "track track" "fine fine";
+    align-content:center;align-items:center;
+  }
+  html[data-layout="wide"] .card-gpu .lbl{grid-area:lbl}
+  html[data-layout="wide"] .card-gpu .big{grid-area:big}
+  html[data-layout="wide"] .card-gpu .track{grid-area:track}
+  html[data-layout="wide"] .card-gpu .fine{grid-area:fine}
+  html[data-layout="wide"] .card-gpu .mini{grid-area:mini;margin-top:0;flex-direction:column;gap:3px;align-items:flex-end}
+  html[data-layout="wide"] .card-gpu .mini .st{flex-direction:row;flex:none;align-items:baseline;gap:4px}
+  html[data-layout="wide"] .card-gpu .mini .st span{font-size:9.5px}
+  html[data-layout="wide"] .card-gpu .mini .st b{font-size:13px}
+
+  /* 磁盘：其余盘符的胶囊在横屏收起，只留主盘和读写速度 */
+  html[data-layout="wide"] .card-disk .pills{display:none}
+  html[data-layout="wide"] .card-net .netrows{gap:4px;margin-top:6px}
+
+  /* 进程列较窄，压缩数值列宽 */
+  html[data-layout="wide"] .proc{grid-template-columns:minmax(0,1fr) 44px 38px;font-size:11px;gap:6px}
+  html[data-layout="wide"] .proc .v{font-size:10px}
+
+  /* ---------- 提示 ---------- */
+  .toast,.hint{
+    position:fixed;left:50%;bottom:calc(env(safe-area-inset-bottom) + 18px);
+    transform:translateX(-50%) translateY(18px);
+    padding:7px 14px;border-radius:99px;font-size:11.5px;backdrop-filter:blur(10px);
+    opacity:0;pointer-events:none;transition:.28s;z-index:10;white-space:nowrap;
+  }
+  .toast{background:rgba(255,93,108,.15);border:1px solid rgba(255,93,108,.35);color:#ffb4bb}
+  .hint{background:rgba(46,230,255,.12);border:1px solid rgba(46,230,255,.3);color:#a8ecff}
+  .toast.show,.hint.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+  /* ================= 皮肤 ================= */
+  /* 深空：原本的青/绿/琥珀 */
+  html[data-theme="space"]{
+    --bg:#05070b; --halo1:rgba(46,230,255,.10); --halo2:rgba(180,140,255,.09);
+    --card-a:rgba(255,255,255,.058); --card-b:rgba(255,255,255,.016);
+    --line:rgba(255,255,255,.075);
+    --txt:#e9eff8; --dim:#7d8da3; --dim2:#55637a;
+    --cyan:#2ee6ff; --cyan2:#7b9dff;
+    --green:#6ef2a4; --green2:#2fbf78;
+    --amber:#ffb35c; --amber2:#f08a2e;
+    --violet:#b48cff; --violet2:#8b5cf6;
+    --warn:#ff5d6c;
+    --ring-bg:rgba(255,255,255,.065);
+    --glow-cpu:rgba(46,230,255,.42);
+    --grid:transparent; --scan:transparent; --gridline:rgba(255,255,255,.05);
+    --num-glow:none;
+  }
+  /* 赛博：品红 + 电子紫，带网格底纹和霓虹字 */
+  html[data-theme="cyber"]{
+    --bg:#0a0410; --halo1:rgba(255,47,208,.15); --halo2:rgba(122,92,255,.13);
+    --card-a:rgba(255,47,208,.05); --card-b:rgba(122,92,255,.03);
+    --line:rgba(255,47,208,.20);
+    --txt:#f8ecff; --dim:#b78cd2; --dim2:#7d5c9b;
+    --cyan:#ff2fd0; --cyan2:#7a5cff;
+    --green:#00f0c8; --green2:#00a894;
+    --amber:#ffd23f; --amber2:#ff9a1f;
+    --violet:#9d7bff; --violet2:#6b3ff0;
+    --warn:#ff3355;
+    --ring-bg:rgba(255,255,255,.07);
+    --glow-cpu:rgba(255,47,208,.55);
+    --grid:rgba(255,47,208,.055); --scan:transparent; --gridline:rgba(255,47,208,.13);
+    --num-glow:0 0 18px rgba(255,47,208,.55);
+  }
+  /* 全息：单色荧光绿终端，等宽字体 + 扫描线 */
+  html[data-theme="holo"]{
+    --bg:#020a06; --halo1:rgba(57,255,136,.11); --halo2:rgba(57,255,136,.05);
+    --card-a:rgba(57,255,136,.045); --card-b:rgba(57,255,136,.012);
+    --line:rgba(57,255,136,.18);
+    --txt:#c9ffe0; --dim:#5fd68e; --dim2:#3f8f63;
+    --cyan:#39ff88; --cyan2:#9dffc0;
+    --green:#39ff88; --green2:#12b35a;
+    --amber:#b6ff5c; --amber2:#7fd41f;
+    --violet:#39ffd0; --violet2:#0fb894;
+    --warn:#ff5555;
+    --ring-bg:rgba(57,255,136,.10);
+    --glow-cpu:rgba(57,255,136,.5);
+    --grid:rgba(57,255,136,.05); --scan:rgba(0,0,0,.18); --gridline:rgba(57,255,136,.12);
+    --num-glow:0 0 14px rgba(57,255,136,.5);
+  }
+  /* 极光：青绿到靛蓝的渐变冷调 */
+  html[data-theme="aurora"]{
+    --bg:#04080f; --halo1:rgba(52,245,214,.13); --halo2:rgba(109,140,255,.14);
+    --card-a:rgba(120,220,255,.05); --card-b:rgba(109,140,255,.02);
+    --line:rgba(140,200,255,.13);
+    --txt:#e6f4ff; --dim:#8aa6c8; --dim2:#5a7296;
+    --cyan:#34f5d6; --cyan2:#6d8cff;
+    --green:#6ef2a4; --green2:#25b57a;
+    --amber:#ffd166; --amber2:#e8a020;
+    --violet:#a78bfa; --violet2:#7c5cf0;
+    --warn:#ff6b6b;
+    --ring-bg:rgba(255,255,255,.07);
+    --glow-cpu:rgba(52,245,214,.45);
+    --grid:rgba(120,200,255,.04); --scan:transparent; --gridline:rgba(120,200,255,.1);
+    --num-glow:none;
+  }
+  /* 熔岩：橙红暖调 */
+  html[data-theme="magma"]{
+    --bg:#0c0503; --halo1:rgba(255,138,61,.14); --halo2:rgba(255,77,94,.11);
+    --card-a:rgba(255,138,61,.055); --card-b:rgba(255,77,94,.02);
+    --line:rgba(255,138,61,.18);
+    --txt:#ffe9dc; --dim:#c08a72; --dim2:#8a5c48;
+    --cyan:#ff8a3d; --cyan2:#ff4d5e;
+    --green:#ffd166; --green2:#e0a020;
+    --amber:#ff6b35; --amber2:#e0451a;
+    --violet:#ff4d6d; --violet2:#c62a4a;
+    --warn:#ff3355;
+    --ring-bg:rgba(255,255,255,.07);
+    --glow-cpu:rgba(255,138,61,.5);
+    --grid:rgba(255,138,61,.05); --scan:transparent; --gridline:rgba(255,138,61,.12);
+    --num-glow:none;
+  }
+
+  /* 用主题变量覆盖上面写死的配色 */
+  html[data-theme] body{
+    background-color:var(--bg);
+    background-image:
+      radial-gradient(900px 420px at 85% -8%, var(--halo1), transparent 62%),
+      radial-gradient(700px 420px at -10% 108%, var(--halo2), transparent 60%);
+    color:var(--txt);
+  }
+  html[data-theme] .card{background:linear-gradient(158deg,var(--card-a),var(--card-b));border-color:var(--line)}
+  html[data-theme] .lbl{color:var(--dim)}
+  html[data-theme] .st span,html[data-theme] .io,html[data-theme] .mini .st span{color:var(--dim2)}
+  html[data-theme] .st b,html[data-theme] .proc .n{color:var(--txt)}
+  html[data-theme] .fine b,html[data-theme] .clock,html[data-theme] .mode-btn,html[data-theme] .icon{color:var(--dim)}
+  html[data-theme] .big b{text-shadow:var(--num-glow)}
+  html[data-theme] .ring-num b{text-shadow:var(--num-glow)}
+  html[data-theme] .ring-bg{stroke:var(--ring-bg)}
+  html[data-theme] .ring-fg{filter:drop-shadow(0 0 7px var(--glow-cpu))}
+  html[data-theme] #cpuGrad stop:first-child{stop-color:var(--cyan)}
+  html[data-theme] #cpuGrad stop:last-child{stop-color:var(--cyan2)}
+  html[data-theme] .core i{background:linear-gradient(180deg,var(--cyan),var(--cyan2))}
+  html[data-theme] .core.hot i{background:linear-gradient(180deg,var(--amber),var(--warn))}
+  html[data-theme] .fill.gpu{background:linear-gradient(90deg,var(--green2),var(--green));box-shadow:none}
+  html[data-theme] .fill.mem{background:linear-gradient(90deg,var(--amber2),var(--amber));box-shadow:none}
+  html[data-theme] .fill.disk{background:linear-gradient(90deg,var(--violet2),var(--violet));box-shadow:none}
+  html[data-theme] .pill{background:rgba(255,255,255,.04);border-color:var(--line);color:var(--dim)}
+  html[data-theme] .pill.warm{color:var(--amber)}
+  html[data-theme] .pill.hot{color:var(--warn)}
+  html[data-theme] .legend .c{box-shadow:0 0 6px var(--glow-cpu)}
+  html[data-theme] .hint{background:rgba(0,0,0,.5);border-color:var(--line);color:var(--txt)}
+  html[data-theme] .mode-btn,html[data-theme] .icon{border-color:var(--line);background:rgba(255,255,255,.04)}
+  html[data-theme="holo"] body{font-family:ui-monospace,"Cascadia Mono",Consolas,"Courier New",monospace}
+  html[data-theme="holo"] .lbl,html[data-theme="holo"] .lbl .sub{letter-spacing:.08em}
+
+  /* 霓虹皮肤给卡片加一层外发光 */
+  html[data-theme="cyber"] .card{
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.06),0 0 26px -14px rgba(255,47,208,.95),0 14px 34px -22px #000;
+  }
+  html[data-theme="holo"] .card{
+    box-shadow:inset 0 1px 0 rgba(57,255,136,.14),0 0 24px -14px rgba(57,255,136,.85),0 14px 34px -22px #000;
+  }
+  html[data-theme="magma"] .card{
+    box-shadow:inset 0 1px 0 rgba(255,180,120,.12),0 0 24px -16px rgba(255,120,60,.9),0 14px 34px -22px #000;
+  }
+
+  /* 氛围底纹：网格 / 扫描线（纯渐变，不吃 GPU） */
+  body::before,body::after{content:"";position:fixed;inset:0;pointer-events:none;z-index:0}
+  .rotator{position:relative;z-index:1}
+  body::before{
+    background-image:
+      linear-gradient(var(--grid) 1px,transparent 1px),
+      linear-gradient(90deg,var(--grid) 1px,transparent 1px);
+    background-size:34px 34px;
+  }
+  body::after{background:repeating-linear-gradient(180deg,var(--scan) 0 1px,transparent 1px 3px)}
+
+  /* ---------- 皮肤面板 ---------- */
+  .sheet{
+    position:fixed;inset:0;z-index:20;display:flex;align-items:flex-end;justify-content:center;
+    background:rgba(0,0,0,.52);backdrop-filter:blur(6px);
+    opacity:0;pointer-events:none;transition:.24s;
+  }
+  .sheet.open{opacity:1;pointer-events:auto}
+  .sheet-inner{
+    width:100%;max-width:560px;padding:16px 16px 24px;
+    background:rgba(12,16,22,.98);border:1px solid var(--line);
+    border-radius:22px 22px 0 0;
+    transform:translateY(26px);transition:transform .26s cubic-bezier(.2,.9,.3,1);
+  }
+  .sheet.open .sheet-inner{transform:translateY(0)}
+  .sheet-title{font-size:11px;letter-spacing:.18em;color:var(--dim);margin-bottom:13px}
+  .skins{display:grid;grid-template-columns:repeat(auto-fit,minmax(92px,1fr));gap:9px}
+  .skin{
+    display:flex;flex-direction:column;align-items:center;gap:7px;
+    padding:11px 6px;border-radius:14px;cursor:pointer;font-family:inherit;
+    background:rgba(255,255,255,.03);border:1px solid var(--line);color:var(--txt);
+  }
+  .skin:active{background:rgba(255,255,255,.08)}
+  .skin.active{border-color:var(--cyan);box-shadow:inset 0 0 0 1px var(--cyan),0 0 20px -4px var(--cyan)}
+  .skin .dot{width:32px;height:32px;border-radius:50%;display:block}
+  .skin .nm{font-size:11px;letter-spacing:.04em}
+</style>
+</head>
+<body>
+<div class="rotator">
+  <div class="wrap">
+
+    <header class="hdr">
+      <div class="hdr-l">
+        <span class="live" id="live"></span>
+        <span class="host" id="host">—</span>
+        <span class="uptime" id="uptime"></span>
+      </div>
+      <div class="hdr-r">
+        <span class="clock" id="clock">--:--</span>
+        <button class="boost-btn" id="boostBtn" title="一键加速：整理内存工作集">加速</button>
+        <button class="icon" id="skinBtn" aria-label="皮肤" title="切换皮肤">◐</button>
+        <button class="mode-btn" id="orientBtn" title="切换：自动 / 横屏 / 竖屏">自动</button>
+        <button class="icon" id="fsBtn" aria-label="全屏">⛶</button>
+      </div>
+    </header>
+
+    <!-- CPU -->
+    <section class="card card-cpu">
+      <div class="lbl">CPU <span class="sub" id="cpuModel"></span></div>
+      <div class="hero-main">
+        <div class="ring">
+          <svg viewBox="0 0 128 128" aria-hidden="true">
+            <defs>
+              <linearGradient id="cpuGrad" x1="0" y1="0" x2="1" y2="1">
+                <stop offset="0%" stop-color="#2ee6ff"/>
+                <stop offset="100%" stop-color="#7b9dff"/>
+              </linearGradient>
+            </defs>
+            <circle class="ring-bg" cx="64" cy="64" r="54"/>
+            <circle class="ring-fg" id="cpuRing" cx="64" cy="64" r="54" stroke="url(#cpuGrad)"/>
+          </svg>
+          <div class="ring-num"><b id="cpuPct">0</b><i>%</i></div>
+        </div>
+        <div class="hero-stats">
+          <div class="st"><span>温度</span><b id="cpuTemp" class="na">—</b></div>
+          <div class="st"><span>功耗</span><b id="cpuPower" class="na">—</b></div>
+          <div class="st"><span>线程</span><b id="cpuThreads">—</b></div>
+        </div>
+      </div>
+      <div class="cores" id="cores"></div>
+    </section>
+
+    <!-- GPU -->
+    <section class="card card-gpu">
+      <div class="lbl">GPU <span class="sub" id="gpuName"></span></div>
+      <div class="big"><b id="gpuPct">0</b><i>%</i></div>
+      <div class="track"><div class="fill gpu" id="vramBar"></div></div>
+      <div class="fine"><span id="vramTxt">—</span><span id="gpuClock"></span></div>
+      <div class="mini">
+        <div class="st"><span>温度</span><b id="gpuTemp" class="na">—</b></div>
+        <div class="st"><span>功耗</span><b id="gpuPower" class="na">—</b></div>
+      </div>
+    </section>
+
+    <!-- 内存 -->
+    <section class="card card-mem">
+      <div class="lbl">内存 <span class="sub" id="memSub"></span></div>
+      <div class="big"><b id="memPct">0</b><i>%</i></div>
+      <div class="track"><div class="fill mem" id="memBar"></div></div>
+      <div class="fine"><span id="memTxt">—</span><span id="memFree"></span></div>
+    </section>
+
+    <!-- 磁盘 -->
+    <section class="card card-disk">
+      <div class="lbl">磁盘 <span class="sub">C:</span></div>
+      <div class="big"><b id="diskPct">0</b><i>%</i></div>
+      <div class="track"><div class="fill disk" id="diskBar"></div></div>
+      <div class="fine"><span id="diskTxt">—</span><span id="diskFree"></span></div>
+      <div class="pills" id="diskPills"></div>
+      <div class="io" id="ioTxt">—</div>
+    </section>
+
+    <!-- 网络 -->
+    <section class="card card-net">
+      <div class="lbl">网络 <span class="sub" id="netIf"></span></div>
+      <div class="netrows">
+        <div class="netrow"><span class="arw d">↓</span><b id="netDown">0</b><i id="netDownU">KB/s</i></div>
+        <div class="netrow"><span class="arw u">↑</span><b id="netUp">0</b><i id="netUpU">KB/s</i></div>
+      </div>
+      <div class="fine"><span id="netNote"></span></div>
+    </section>
+
+    <!-- 趋势 -->
+    <section class="card card-chart">
+      <div class="lbl">趋势
+        <span class="sub">近 120 秒</span>
+        <div class="legend">
+          <em><i class="c"></i>CPU</em>
+          <em><i class="g"></i>GPU</em>
+          <em><i class="m"></i>内存</em>
+        </div>
+      </div>
+      <canvas id="chart"></canvas>
+    </section>
+
+    <!-- 进程 -->
+    <section class="card card-proc">
+      <div class="lbl">进程 TOP <span class="sub" id="procCount"></span></div>
+      <div class="procs" id="procList"></div>
+    </section>
+
+  </div>
+
+  <div class="toast" id="toast">连接中断 · 正在重试</div>
+  <div class="hint" id="hint"></div>
+
+  <div class="sheet" id="themeSheet">
+    <div class="sheet-inner">
+      <div class="sheet-title">皮肤 SKIN</div>
+      <div class="skins" id="skinList"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  var $ = function (id) { return document.getElementById(id); };
+  var RING_C = 2 * Math.PI * 54;   // 圆环周长
+  var HIST = 120;                  // 历史点数
+  var H = { cpu: [], gpu: [], mem: [] };
+
+  /* ================= 横竖屏 ================= */
+  var ORIENT = ["auto", "landscape", "portrait"];
+  var ORIENT_LABEL = { auto: "自动", landscape: "横屏", portrait: "竖屏" };
+  var orientMode = "auto";
+  try { orientMode = localStorage.getItem("pd_orient") || "auto"; } catch (e) {}
+  if (ORIENT.indexOf(orientMode) < 0) orientMode = "auto";
+
+  function computeLayout() {
+    var vw = window.innerWidth, vh = window.innerHeight;
+    if (orientMode === "landscape") return { wide: true, rot: vh > vw ? 90 : 0 };
+    if (orientMode === "portrait") return { wide: false, rot: vw > vh ? -90 : 0 };
+    return { wide: vw > vh * 1.02, rot: 0 };
+  }
+
+  function applyOrient() {
+    var info = computeLayout();
+    var root = document.documentElement;
+    root.setAttribute("data-layout", info.wide ? "wide" : "tall");
+    if (info.rot) root.setAttribute("data-rotate", String(info.rot));
+    else root.removeAttribute("data-rotate");
+    // 旋转后"有效可用高度"其实是视口宽度，交给 CSS 做自适应尺寸
+    var vw = window.innerWidth, vh = window.innerHeight;
+    root.style.setProperty("--eh", (info.rot ? vw : vh) + "px");
+    root.style.setProperty("--ew", (info.rot ? vh : vw) + "px");
+    setText($("orientBtn"), ORIENT_LABEL[orientMode]);
+    // 布局变了画布尺寸也会变
+    setTimeout(function () { fitCanvas(); drawChart(); }, 60);
+  }
+
+  var hintTimer = null;
+  function showHint(text) {
+    var el = $("hint");
+    if (!el) return;
+    el.textContent = text;
+    el.classList.add("show");
+    clearTimeout(hintTimer);
+    hintTimer = setTimeout(function () { el.classList.remove("show"); }, 1400);
+  }
+
+  /* ================= 皮肤 ================= */
+  var THEMES = [
+    { id: "space",  name: "深空",   a: "#2ee6ff", b: "#7b9dff" },
+    { id: "cyber",  name: "赛博",   a: "#ff2fd0", b: "#7a5cff" },
+    { id: "holo",   name: "全息",   a: "#39ff88", b: "#9dffc0" },
+    { id: "aurora", name: "极光",   a: "#34f5d6", b: "#6d8cff" },
+    { id: "magma",  name: "熔岩",   a: "#ff8a3d", b: "#ff4d5e" }
+  ];
+  var themeId = "space";
+  try { themeId = localStorage.getItem("pd_theme") || "space"; } catch (e) {}
+  if (!THEMES.some(function (t) { return t.id === themeId; })) themeId = "space";
+
+  // 画布不吃 CSS 变量，得把颜色读出来手动喂给 ctx
+  var COL = { cpu: "#2ee6ff", gpu: "#6ef2a4", mem: "#ffb35c", grid: "rgba(255,255,255,.05)" };
+
+  function cssVar(name, fallback) {
+    try {
+      var v = getComputedStyle(document.documentElement).getPropertyValue(name);
+      return (v && v.trim()) || fallback;
+    } catch (e) { return fallback; }
+  }
+
+  function refreshColors() {
+    COL.cpu = cssVar("--cyan", COL.cpu);
+    COL.gpu = cssVar("--green", COL.gpu);
+    COL.mem = cssVar("--amber", COL.mem);
+    COL.grid = cssVar("--gridline", "rgba(255,255,255,.05)");
+  }
+
+  function applyTheme(id) {
+    themeId = id;
+    document.documentElement.setAttribute("data-theme", id);
+    try { localStorage.setItem("pd_theme", id); } catch (e) {}
+    var nodes = document.querySelectorAll("#skinList .skin");
+    for (var i = 0; i < nodes.length; i++) {
+      nodes[i].classList.toggle("active", nodes[i].getAttribute("data-id") === id);
+    }
+    refreshColors();
+    drawChart();
+  }
+
+  function buildSkins() {
+    var box = $("skinList");
+    if (!box) return;
+    THEMES.forEach(function (t) {
+      var b = document.createElement("button");
+      b.className = "skin" + (t.id === themeId ? " active" : "");
+      b.setAttribute("data-id", t.id);
+      b.innerHTML = '<span class="dot" style="background:linear-gradient(135deg,' + t.a + ',' + t.b + ')"></span>' +
+                    '<span class="nm">' + t.name + "</span>";
+      b.addEventListener("click", function () {
+        applyTheme(t.id);
+        closeSheet();
+        showHint("皮肤：" + t.name);
+      });
+      box.appendChild(b);
+    });
+  }
+
+  function openSheet() { $("themeSheet").classList.add("open"); }
+  function closeSheet() { $("themeSheet").classList.remove("open"); }
+
+  /* ================= 一键加速 ================= */
+  var boostToken = "";
+  (function () {
+    var m = document.querySelector('meta[name="boost-token"]');
+    if (m) boostToken = (m.getAttribute("content") || "").trim();
+  })();
+
+  var boostTimer = null;
+
+  function fmtBytes(n) {
+    if (!n || n < 0) return "0 MB";
+    if (n >= 1073741824) return (n / 1073741824).toFixed(2) + " GB";
+    return Math.round(n / 1048576) + " MB";
+  }
+
+  function boostCooldown(sec) {
+    var btn = $("boostBtn");
+    var left = Math.max(1, Math.round(sec));
+    btn.disabled = true;
+    btn.classList.remove("busy");
+    btn.textContent = left + "s";
+    clearInterval(boostTimer);
+    boostTimer = setInterval(function () {
+      left--;
+      if (left <= 0) {
+        clearInterval(boostTimer);
+        btn.disabled = false;
+        btn.textContent = "加速";
+      } else {
+        btn.textContent = left + "s";
+      }
+    }, 1000);
+  }
+
+  function resetBoostBtn() {
+    var btn = $("boostBtn");
+    btn.classList.remove("busy");
+    btn.textContent = "加速";
+  }
+
+  function doBoost() {
+    var btn = $("boostBtn");
+    if (btn.disabled) return;
+    if (!boostToken || boostToken.indexOf("__") === 0) {
+      showHint("加速不可用，请重启一次服务");
+      return;
+    }
+    btn.disabled = true;
+    btn.classList.add("busy");
+    btn.textContent = "整理中…";
+
+    fetch("/api/boost", { method: "POST", headers: { "X-Boost-Token": boostToken } })
+      .then(function (r) {
+        return r.json().then(function (d) { return { status: r.status, body: d }; },
+                             function () { return { status: r.status, body: {} }; });
+      })
+      .then(function (res) {
+        var d = res.body || {};
+        if (res.status === 200 && d.ok) {
+          if ((d.freed || 0) < 30 * 1048576) {
+            showHint("内存已经很干净了（整理 " + (d.trimmed || 0) + " 个进程）");
+          } else {
+            showHint("已释放 " + fmtBytes(d.freed) + " · " + d.beforePct + "% → " + d.afterPct + "%");
+          }
+          btn.textContent = "✓";
+          setTimeout(function () { boostCooldown(15); }, 700);
+        } else if (res.status === 429) {
+          showHint("太频繁了，稍等几秒");
+          boostCooldown(d.retryAfter || 10);
+        } else if (res.status === 403) {
+          showHint("加速令牌失效，刷新页面后再试");
+          resetBoostBtn();
+          setTimeout(function () { btn.disabled = false; }, 1200);
+        } else {
+          showHint("加速失败" + (d.detail ? "：" + d.detail : ""));
+          resetBoostBtn();
+          setTimeout(function () { btn.disabled = false; }, 1500);
+        }
+      })
+      .catch(function () {
+        showHint("加速失败，检查连接");
+        resetBoostBtn();
+        setTimeout(function () { btn.disabled = false; }, 1500);
+      });
+  }
+
+  /* ---------------- 格式化 ---------------- */
+  function fixed(v, n) { return (v == null || isNaN(v)) ? "—" : Number(v).toFixed(n); }
+  function intOf(v) { return (v == null || isNaN(v)) ? "—" : Math.round(v); }
+
+  function uptimeTxt(sec) {
+    if (!sec && sec !== 0) return "";
+    sec = Math.max(0, Math.floor(sec));
+    var d = Math.floor(sec / 86400), h = Math.floor(sec % 86400 / 3600), m = Math.floor(sec % 3600 / 60);
+    if (d > 0) return "已运行 " + d + " 天 " + h + " 小时";
+    if (h > 0) return "已运行 " + h + " 小时 " + m + " 分";
+    return "已运行 " + m + " 分钟";
+  }
+
+  function gb(bytes) { return bytes ? bytes / 1073741824 : 0; }
+
+  function speed(v) {
+    if (!v || isNaN(v)) return ["0", "B/s"];
+    if (v < 1024) return [String(Math.round(v)), "B/s"];
+    if (v < 1048576) return [(v / 1024).toFixed(1), "KB/s"];
+    if (v < 1073741824) return [(v / 1048576).toFixed(2), "MB/s"];
+    return [(v / 1073741824).toFixed(2), "GB/s"];
+  }
+
+  function setText(el, txt) { if (el && el.textContent !== txt) el.textContent = txt; }
+
+  function setNum(el, v, dec) {
+    if (!el) return;
+    var txt = (dec === 0) ? intOf(v) : fixed(v, dec == null ? 0 : dec);
+    setText(el, txt);
+  }
+
+  /* ---------------- 圆环 / 进度条 ---------------- */
+  var ring = $("cpuRing");
+  ring.style.strokeDasharray = RING_C.toFixed(2);
+
+  function setRing(pct) {
+    var p = Math.max(0, Math.min(100, pct || 0));
+    ring.style.strokeDashoffset = (RING_C * (1 - p / 100)).toFixed(2);
+  }
+
+  function setBar(el, pct) {
+    if (!el) return;
+    el.style.width = Math.max(0, Math.min(100, pct || 0)) + "%";
+  }
+
+  /* ---------------- 核心条 ---------------- */
+  var coreEls = [];
+  (function buildCores() {
+    var box = $("cores");
+    for (var i = 0; i < 32; i++) {
+      var d = document.createElement("div");
+      d.className = "core";
+      d.innerHTML = "<i></i>";
+      box.appendChild(d);
+      coreEls.push(d);
+    }
+  })();
+
+  function setCores(list) {
+    coreEls.forEach(function (el, i) {
+      var v = list[i];
+      if (v == null) { el.style.display = "none"; return; }
+      el.style.display = "";
+      var bar = el.firstChild;
+      bar.style.height = Math.max(2, Math.min(100, v)) + "%";
+      el.classList.toggle("hot", v > 85);
+    });
+  }
+
+  /* ---------------- 趋势图 ---------------- */
+  var cv = $("chart"), ctx = cv.getContext("2d"), CW = 0, CHh = 0;
+
+  // 注意：这里必须用布局尺寸（clientWidth/clientHeight），不能用 getBoundingClientRect()。
+  // 横屏模式整个画面被 rotate 了 90°，getBoundingClientRect() 返回的是"旋转后外接矩形"，
+  // 宽高会被对调（891x84 -> 84x891），位图按错误尺寸分配后再被拉伸，曲线就糊了。
+  function canvasBox() {
+    return {
+      w: Math.max(1, cv.clientWidth || cv.offsetWidth || 1),
+      h: Math.max(1, cv.clientHeight || cv.offsetHeight || 1)
+    };
+  }
+
+  function fitCanvas() {
+    var box = canvasBox();
+    var dpr = Math.min(window.devicePixelRatio || 1, 3);
+    // 尺寸没变就不重分配位图（重分配会清空画布）
+    if (box.w === CW && box.h === CHh && cv.width === Math.round(CW * dpr)) return false;
+    CW = box.w;
+    CHh = box.h;
+    cv.width = Math.round(CW * dpr);
+    cv.height = Math.round(CHh * dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    return true;
+  }
+
+  // 布局一变（切横竖屏、转屏、窗口缩放）就重算，比等 60ms 定时器可靠
+  if (typeof ResizeObserver === "function") {
+    new ResizeObserver(function () {
+      if (fitCanvas()) drawChart();
+    }).observe(cv);
+  }
+
+  // 把 #rrggbb 转成 rgba（画布渐变需要透明度）
+  function hexA(hex, a) {
+    var h = (hex || "").trim();
+    if (h.charAt(0) !== "#") return h;
+    if (h.length === 4) h = "#" + h[1] + h[1] + h[2] + h[2] + h[3] + h[3];
+    var n = parseInt(h.slice(1), 16);
+    if (isNaN(n)) return h;
+    return "rgba(" + ((n >> 16) & 255) + "," + ((n >> 8) & 255) + "," + (n & 255) + "," + a + ")";
+  }
+
+  function line(data, color, fill, alpha) {
+    if (data.length < 2) return;
+    var n = data.length, step = CW / (HIST - 1);
+    var x0 = CW - (n - 1) * step;
+    ctx.globalAlpha = (alpha == null ? 1 : alpha);
+    ctx.beginPath();
+    for (var i = 0; i < n; i++) {
+      var x = x0 + i * step;
+      var y = CHh - (Math.max(0, Math.min(100, data[i])) / 100) * (CHh - 2) - 1;
+      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 1.6;
+    ctx.lineJoin = "round";
+    ctx.stroke();
+
+    if (fill) {
+      ctx.lineTo(x0 + (n - 1) * step, CHh);
+      ctx.lineTo(x0, CHh);
+      ctx.closePath();
+      var g = ctx.createLinearGradient(0, 0, 0, CHh);
+      g.addColorStop(0, hexA(color, 0.22));
+      g.addColorStop(1, hexA(color, 0));
+      ctx.fillStyle = g;
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  function drawChart() {
+    if (!CW) return;
+    ctx.clearRect(0, 0, CW, CHh);
+    ctx.strokeStyle = COL.grid;
+    ctx.lineWidth = 1;
+    for (var i = 0; i <= 4; i++) {
+      var y = Math.round(CHh * i / 4) + 0.5;
+      ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(CW, y); ctx.stroke();
+    }
+    line(H.mem, COL.mem, false, 0.55);
+    line(H.gpu, COL.gpu, false, 0.6);
+    line(H.cpu, COL.cpu, true, 1);
+  }
+
+  /* ---------------- 渲染 ---------------- */
+  var diskPillsKey = "";
+
+  function render(d) {
+    // 顶栏
+    setText($("host"), d.host || "PC");
+    setText($("uptime"), uptimeTxt(d.uptime));
+    setText($("cpuModel"), (d.cpuModel || "").replace(/\((R|TM)\)/g, "").replace(/\s+/g, " "));
+    document.title = (d.host || "PC") + " · 性能看板";
+
+    // CPU
+    var cpu = d.cpu || {};
+    setNum($("cpuPct"), cpu.pct, 0);
+    setRing(cpu.pct);
+    setText($("cpuThreads"), (cpu.threads || 0) + " 线程");
+    var ct = $("cpuTemp"), cp = $("cpuPower");
+    if (cpu.temp == null) { setText(ct, "—"); ct.classList.add("na"); }
+    else { setText(ct, Math.round(cpu.temp) + "°C"); ct.classList.remove("na"); }
+    if (cpu.power == null) { setText(cp, "—"); cp.classList.add("na"); }
+    else { setText(cp, cpu.power.toFixed(1) + " W"); cp.classList.remove("na"); }
+    setCores(cpu.cores || []);
+
+    // GPU
+    var g = d.gpu || {};
+    setText($("gpuName"), (g.name || "未检测到").replace("NVIDIA GeForce ", "").replace(" Laptop GPU", " Laptop"));
+    setNum($("gpuPct"), g.util, 0);
+    var vramPct = (g.memUsed != null && g.memTotal) ? (g.memUsed / g.memTotal * 100) : 0;
+    setBar($("vramBar"), vramPct);
+    setText($("vramTxt"), g.memUsed != null ? (g.memUsed / 1024).toFixed(1) + " / " + (g.memTotal / 1024).toFixed(0) + " GB" : "—");
+    setText($("gpuClock"), g.clock ? Math.round(g.clock) + " MHz" : "");
+    var gt = $("gpuTemp"), gp = $("gpuPower");
+    if (g.temp == null) { setText(gt, "—"); gt.classList.add("na"); }
+    else { setText(gt, Math.round(g.temp) + "°C"); gt.classList.remove("na"); }
+    if (g.power == null) { setText(gp, "—"); gp.classList.add("na"); }
+    else { setText(gp, g.power.toFixed(1) + " W"); gp.classList.remove("na"); }
+
+    // 内存
+    var m = d.mem || {};
+    setNum($("memPct"), m.pct, 0);
+    setBar($("memBar"), m.pct);
+    setText($("memSub"), m.total ? (gb(m.total).toFixed(0) + " GB") : "");
+    setText($("memTxt"), m.total ? (gb(m.used).toFixed(1) + " / " + gb(m.total).toFixed(1) + " GB") : "—");
+    setText($("memFree"), m.total ? ("余 " + gb(m.total - m.used).toFixed(1) + " GB") : "");
+
+    // 磁盘
+    var disks = d.disk || [];
+    var sysDisk = null;
+    for (var i = 0; i < disks.length; i++) {
+      if (/^C:/i.test(disks[i].mount)) { sysDisk = disks[i]; break; }
+    }
+    if (!sysDisk && disks.length) sysDisk = disks[0];
+    if (sysDisk) {
+      setNum($("diskPct"), sysDisk.pct, 0);
+      setBar($("diskBar"), sysDisk.pct);
+      setText($("diskTxt"), gb(sysDisk.used).toFixed(0) + " / " + gb(sysDisk.total).toFixed(0) + " GB");
+      setText($("diskFree"), "余 " + gb(sysDisk.total - sysDisk.used).toFixed(0) + " GB");
+    }
+    var io = d.io || {};
+    var rIo = speed(io.read), wIo = speed(io.write);
+    setText($("ioTxt"), "读 " + rIo.join(" ") + "  写 " + wIo.join(" "));
+
+    var others = disks.filter(function (x) { return x !== sysDisk; });
+    var key = others.map(function (x) { return x.mount + x.pct; }).join("|");
+    if (key !== diskPillsKey) {
+      diskPillsKey = key;
+      $("diskPills").innerHTML = others.map(function (x) {
+        var cls = x.pct >= 90 ? "pill hot" : (x.pct >= 80 ? " pill warm" : "pill");
+        return '<span class="' + cls + '">' + x.mount.replace(/[\\/:]/g, "") + " " + Math.round(x.pct) + "%</span>";
+      }).join("");
+    }
+
+    // 网络
+    var net = d.net || {};
+    var dn = speed(net.down), up = speed(net.up);
+    setText($("netDown"), dn[0]); setText($("netDownU"), dn[1]);
+    setText($("netUp"), up[0]); setText($("netUpU"), up[1]);
+    setText($("netIf"), net.iface || "");
+    setText($("netNote"), net.totalDown ? "累计 ↓ " + (net.totalDown / 1073741824).toFixed(1) + " GB" : "");
+
+    // 进程
+    var top = d.top || [];
+    setText($("procCount"), d.restricted ? "受限视图" : (top.length ? "按 CPU 排序" : ""));
+    $("procList").innerHTML = top.map(function (p) {
+      var cpuTxt = (p.cpu < 1 ? p.cpu.toFixed(2) : p.cpu.toFixed(1)) + "%";
+      return '<div class="proc' + (p.cpu < 0.2 ? " ghost" : "") + '">' +
+        '<span class="n" title="' + (p.name || "") + '">' + esc(p.name || "?") + "</span>" +
+        '<span class="v">' + Math.round((p.mem || 0) / 1048576) + " MB</span>" +
+        '<span class="c">' + cpuTxt + "</span></div>";
+    }).join("");
+
+    // 时钟
+    if (d.t) {
+      var dd = new Date(d.t * 1000);
+      setText($("clock"), ("0" + dd.getHours()).slice(-2) + ":" + ("0" + dd.getMinutes()).slice(-2));
+    }
+
+    // 历史
+    push(H.cpu, cpu.pct); push(H.gpu, g.util == null ? 0 : g.util); push(H.mem, m.pct);
+    drawChart();
+  }
+
+  function esc(s) {
+    return String(s).replace(/[&<>"']/g, function (c) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+    });
+  }
+
+  function push(arr, v) {
+    arr.push(Math.max(0, Math.min(100, v || 0)));
+    if (arr.length > HIST) arr.shift();
+  }
+
+  /* ---------------- 轮询 ---------------- */
+  var fails = 0;
+
+  function setLive(ok) {
+    $("live").classList.toggle("off", !ok);
+    $("toast").classList.toggle("show", !ok);
+  }
+
+  function loop() {
+    var ctrl = ("AbortController" in window) ? new AbortController() : null;
+    var to = ctrl ? setTimeout(function () { ctrl.abort(); }, 4000) : null;
+    fetch("/api/stats", { cache: "no-store", signal: ctrl ? ctrl.signal : undefined })
+      .then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); })
+      .then(function (d) {
+        clearTimeout(to);
+        fails = 0;
+        setLive(true);
+        render(d);
+      })
+      .catch(function () {
+        clearTimeout(to);
+        fails++;
+        if (fails >= 2) setLive(false);
+      })
+      .then(function () { setTimeout(loop, 1000); });
+  }
+
+  /* ---------------- 全屏 / 常亮 ---------------- */
+  $("fsBtn").addEventListener("click", function () {
+    var el = document.documentElement;
+    if (!document.fullscreenElement && el.requestFullscreen) {
+      el.requestFullscreen().catch(function () {});
+    } else if (document.exitFullscreen && document.fullscreenElement) {
+      document.exitFullscreen();
+    }
+  });
+
+  $("orientBtn").addEventListener("click", function () {
+    orientMode = ORIENT[(ORIENT.indexOf(orientMode) + 1) % ORIENT.length];
+    try { localStorage.setItem("pd_orient", orientMode); } catch (e) {}
+    applyOrient();
+    showHint("已切换：" + ORIENT_LABEL[orientMode]);
+  });
+
+  $("skinBtn").addEventListener("click", function () { openSheet(); });
+  $("boostBtn").addEventListener("click", doBoost);
+  $("themeSheet").addEventListener("click", function (e) { if (e.target === this) closeSheet(); });
+  document.addEventListener("keydown", function (e) { if (e.key === "Escape") closeSheet(); });
+
+  var wakeLock = null;
+  function keepAwake() {
+    if (!("wakeLock" in navigator)) return;
+    navigator.wakeLock.request("screen").then(function (l) {
+      wakeLock = l;
+      l.addEventListener("release", function () { wakeLock = null; });
+    }).catch(function () {});
+  }
+  document.addEventListener("visibilitychange", function () {
+    if (document.visibilityState === "visible" && !wakeLock) keepAwake();
+  });
+
+  /* ---------------- 启动 ---------------- */
+  var rt = null;
+  function onViewportChange() {
+    clearTimeout(rt);
+    rt = setTimeout(function () { applyOrient(); }, 120);
+  }
+  window.addEventListener("resize", onViewportChange);
+  window.addEventListener("orientationchange", onViewportChange);
+
+  function boot() {
+    applyOrient();
+    buildSkins();
+    applyTheme(themeId);
+    fitCanvas();
+    drawChart();
+    loop();
+    keepAwake();
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", boot);
+  } else {
+    boot();
+  }
+})();
+</script>
+</body>
+</html>
