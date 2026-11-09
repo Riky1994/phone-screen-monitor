@@ -57,6 +57,7 @@
     min-height:100dvh;
     padding:calc(env(safe-area-inset-top) + 9px) 12px calc(env(safe-area-inset-bottom) + 16px);
     overflow-x:hidden;
+    display:flex;flex-direction:column;
   }
   html[data-rotate] .rotator{
     position:fixed;top:50%;left:50%;
@@ -73,22 +74,27 @@
 
   /* ---------- 栅格：分页 ---------- */
   .wrap{
-    max-width:540px;margin:0 auto;
+    max-width:540px;margin:0 auto;width:100%;
+    flex:1 0 auto;min-height:0;
     display:flex;flex-direction:column;gap:10px;
   }
-  .pages{display:block}
+  .pages{flex:1 0 auto;min-height:0;display:flex;flex-direction:column}
   .page{
     display:none;gap:10px;
     grid-template-columns:minmax(0,1fr) minmax(0,1fr);
     align-content:start;align-items:stretch;
   }
-  .page.active{display:grid}
-  .page[data-page="1"]{grid-template-areas:
+  .page.active{display:grid;flex:1 0 auto;min-height:0}
+  .page[data-page="1"]{
+    align-content:stretch;
+    grid-template-areas:
       "cpu  cpu"
       "gpu  mem"
       "disk net"
       "chart chart"
-      "proc proc";}
+      "proc proc";
+    grid-template-rows:auto auto auto 1fr auto;
+  }
   .page[data-page="2"]{grid-template-areas:
       "fps  vram";}
   .page[data-page="3"]{grid-template-areas:
@@ -105,7 +111,9 @@
     grid-template-areas:
       "cpu   gpu   disk  proc"
       "cpu   mem   net   proc"
-      "chart chart chart chart";}
+      "chart chart chart chart";
+    grid-template-rows:auto auto 1fr;
+  }
   html[data-layout="wide"] .page[data-page="2"]{
     grid-template-columns:1fr 1fr;
     grid-template-areas:"fps  vram";}
@@ -116,7 +124,7 @@
   .card-mem{grid-area:mem}
   .card-disk{grid-area:disk}
   .card-net{grid-area:net}
-  .card-chart{grid-area:chart}
+  .card-chart{grid-area:chart;display:flex;flex-direction:column;min-height:0}
   .card-proc{grid-area:proc}
   .card-fps{grid-area:fps}
   .card-vram{grid-area:vram}
@@ -303,7 +311,7 @@
   .legend .c{background:var(--cyan);box-shadow:0 0 6px rgba(46,230,255,.7)}
   .legend .g{background:var(--green);box-shadow:0 0 6px rgba(110,242,164,.6)}
   .legend .m{background:var(--amber);box-shadow:0 0 6px rgba(255,179,92,.6)}
-  #chart{width:100%;height:98px;display:block;margin-top:8px}
+  #chart{width:100%;flex:1;min-height:96px;display:block;margin-top:8px}
 
   /* ---------- 进程 ---------- */
   .procs{display:flex;flex-direction:column;gap:5px;margin-top:9px}
@@ -321,7 +329,7 @@
   html[data-layout="wide"] .ring{width:112px;height:112px}
   html[data-layout="wide"] .ring-num b{font-size:30px}
   html[data-layout="wide"] .cores{height:20px;margin-top:9px}
-  html[data-layout="wide"] #chart{height:clamp(46px,calc(var(--eh,400px) * .16),74px);margin-top:6px}
+  html[data-layout="wide"] #chart{min-height:clamp(46px,calc(var(--eh,400px) * .16),74px);margin-top:6px}
   html[data-layout="wide"] .track{margin-top:7px}
   html[data-layout="wide"] .fine{margin-top:5px;font-size:10.5px}
 

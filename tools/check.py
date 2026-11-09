@@ -35,7 +35,7 @@ if "__BOOST_TOKEN__" not in html:
     problems.append("页面里缺少 __BOOST_TOKEN__ 占位符，加速接口的令牌无法注入")
 
 # 分页栅格一致性：每页的卡片集合必须和该页的 grid-template-areas 完全对应
-card_areas = dict(re.findall(r"\.(card-[a-z]+)\{grid-area:([a-z]+)\}", css))
+card_areas = dict(re.findall(r"\.(card-[a-z]+)\{[^}]*?grid-area:\s*([a-z]+)", css))
 if not card_areas:
     problems.append("没找到卡片 grid-area 定义")
 
