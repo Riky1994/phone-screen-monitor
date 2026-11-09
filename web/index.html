@@ -71,32 +71,36 @@
   html[data-rotate="90"] .rotator{transform:translate(-50%,-50%) rotate(90deg)}
   html[data-rotate="-90"] .rotator{transform:translate(-50%,-50%) rotate(-90deg)}
 
-  /* ---------- 栅格 ---------- */
+  /* ---------- 栅格：分页 ---------- */
   .wrap{
     max-width:540px;margin:0 auto;
-    display:grid;gap:10px;
+    display:flex;flex-direction:column;gap:10px;
+  }
+  .pages{display:block}
+  .page{
+    display:none;gap:10px;
     grid-template-columns:minmax(0,1fr) minmax(0,1fr);
-    grid-template-areas:
-      "hdr  hdr"
+    align-content:start;align-items:stretch;
+  }
+  .page.active{display:grid}
+  .page[data-page="1"]{grid-template-areas:
       "cpu  cpu"
       "gpu  mem"
+      "chart chart";}
+  .page[data-page="2"]{grid-template-areas:
       "disk net"
-      "chart chart"
-      "proc proc";
-    align-content:start;
-    align-items:stretch;
+      "proc proc";}
+
+  html[data-layout="wide"] .wrap{max-width:1120px;gap:8px}
+  html[data-layout="wide"] .page{
+    grid-template-columns:1.1fr 1fr 1fr;
+    gap:8px;align-content:stretch;
   }
-  html[data-layout="wide"] .wrap{
-    max-width:1120px;
-    grid-template-columns:1.1fr 1fr 1fr 1.1fr;
-    grid-template-areas:
-      "hdr   hdr   hdr   hdr"
-      "cpu   gpu   disk  proc"
-      "cpu   mem   net   proc"
-      "chart chart chart chart";
-    gap:8px;
-    align-content:stretch;
-  }
+  html[data-layout="wide"] .page[data-page="1"]{grid-template-areas:
+      "cpu   gpu   mem"
+      "cpu   chart chart";}
+  html[data-layout="wide"] .page[data-page="2"]{grid-template-areas:
+      "disk  net   proc";}
   .card-cpu{grid-area:cpu}
   .card-gpu{grid-area:gpu}
   .card-mem{grid-area:mem}
@@ -105,8 +109,21 @@
   .card-chart{grid-area:chart}
   .card-proc{grid-area:proc}
 
+  /* ---------- 分页器 ---------- */
+  .pager{display:flex;align-items:center;justify-content:center;gap:10px;padding:2px 0 4px}
+  .pg-btn{width:30px;height:28px;font-size:15px;line-height:1;padding-bottom:2px}
+  .pg-dots{display:flex;align-items:center;gap:7px;height:28px}
+  .pg-dot{
+    width:7px;height:7px;border-radius:99px;border:0;padding:0;cursor:pointer;
+    background:rgba(255,255,255,.2);transition:width .25s ease,background .25s ease,box-shadow .25s;
+  }
+  .pg-dot.on{width:20px;background:var(--cyan);box-shadow:0 0 8px var(--glow-cpu)}
+  html[data-theme] .pg-dot{background:rgba(255,255,255,.16)}
+  html[data-theme] .pg-dot.on{background:var(--cyan);box-shadow:0 0 8px var(--glow-cpu)}
+
+
   /* ---------- 顶栏 ---------- */
-  .hdr{grid-area:hdr;display:flex;align-items:center;justify-content:space-between;padding:0 3px 1px;gap:8px}
+  .hdr{display:flex;align-items:center;justify-content:space-between;padding:0 3px 1px;gap:8px}
   .hdr-l{display:flex;align-items:center;gap:7px;min-width:0}
   .live{width:7px;height:7px;border-radius:50%;background:var(--green);box-shadow:0 0 9px var(--green);flex:none;transition:.3s}
   .live.off{background:#ff5d6c;box-shadow:0 0 9px #ff5d6c}
@@ -466,6 +483,11 @@
       </div>
     </header>
 
+    <main class="pages">
+
+      <!-- ========== 第 1 页：概览 ========== -->
+      <section class="page active" data-page="1">
+
     <!-- CPU -->
     <section class="card card-cpu">
       <div class="lbl">CPU <span class="sub" id="cpuModel"></span></div>
@@ -512,6 +534,24 @@
       <div class="fine"><span id="memTxt">—</span><span id="memFree"></span></div>
     </section>
 
+    <!-- 趋势 -->
+    <section class="card card-chart">
+      <div class="lbl">趋势
+        <span class="sub">近 120 秒</span>
+        <div class="legend">
+          <em><i class="c"></i>CPU</em>
+          <em><i class="g"></i>GPU</em>
+          <em><i class="m"></i>内存</em>
+        </div>
+      </div>
+      <canvas id="chart"></canvas>
+    </section>
+
+      </section><!-- /第 1 页 -->
+
+      <!-- ========== 第 2 页：设备与进程 ========== -->
+      <section class="page" data-page="2">
+
     <!-- 磁盘 -->
     <section class="card card-disk">
       <div class="lbl">磁盘 <span class="sub">C:</span></div>
@@ -532,24 +572,23 @@
       <div class="fine"><span id="netNote"></span></div>
     </section>
 
-    <!-- 趋势 -->
-    <section class="card card-chart">
-      <div class="lbl">趋势
-        <span class="sub">近 120 秒</span>
-        <div class="legend">
-          <em><i class="c"></i>CPU</em>
-          <em><i class="g"></i>GPU</em>
-          <em><i class="m"></i>内存</em>
-        </div>
-      </div>
-      <canvas id="chart"></canvas>
-    </section>
-
     <!-- 进程 -->
     <section class="card card-proc">
       <div class="lbl">进程 TOP <span class="sub" id="procCount"></span></div>
       <div class="procs" id="procList"></div>
     </section>
+
+      </section><!-- /第 2 页 -->
+
+    </main>
+
+    <!-- 换页控件 -->
+    <div class="pager" id="pager">
+      <button class="icon pg-btn" id="pgPrev" aria-label="上一页" title="上一页">‹</button>
+      <div class="pg-dots" id="pgDots"></div>
+      <button class="icon pg-btn" id="pgNext" aria-label="下一页" title="下一页">›</button>
+      <button class="mode-btn" id="pgMode" title="切换：自动轮播 / 手动">自动</button>
+    </div>
 
   </div>
 
@@ -1088,6 +1127,84 @@
     if (document.visibilityState === "visible" && !wakeLock) keepAwake();
   });
 
+  /* ================= 分页 ================= */
+  var pages = [];
+  var pageIdx = 0;
+  var autoPage = true;
+  var AUTO_SEC = 20;
+  var pgTimer = null;
+
+  function buildPager() {
+    pages = Array.prototype.slice.call(document.querySelectorAll(".page"));
+    var dots = $("pgDots");
+    if (!dots) return;
+    dots.innerHTML = "";
+    pages.forEach(function (p, i) {
+      var b = document.createElement("button");
+      b.className = "pg-dot";
+      b.setAttribute("aria-label", "第 " + (i + 1) + " 页");
+      b.title = "第 " + (i + 1) + " 页";
+      b.addEventListener("click", function () { showPage(i, true); });
+      dots.appendChild(b);
+    });
+  }
+
+  function showPage(i, manual) {
+    if (!pages.length) return;
+    pageIdx = (i % pages.length + pages.length) % pages.length;
+    pages.forEach(function (p, k) {
+      p.classList.toggle("active", k === pageIdx);
+    });
+    var dots = $("pgDots") ? $("pgDots").children : [];
+    for (var k = 0; k < dots.length; k++) {
+      dots[k].classList.toggle("on", k === pageIdx);
+    }
+    try { localStorage.setItem("pd_page", String(pageIdx)); } catch (e) {}
+    if (manual) restartAuto();
+    // 趋势图在第 1 页，切回来时画布尺寸要从 0 恢复
+    if (pages[pageIdx].getAttribute("data-page") === "1") {
+      setTimeout(function () { fitCanvas(); drawChart(); }, 60);
+    }
+  }
+
+  function restartAuto() {
+    clearTimeout(pgTimer);
+    if (!autoPage || pages.length < 2) return;
+    pgTimer = setTimeout(function () {
+      if (document.hidden) { restartAuto(); return; }
+      showPage(pageIdx + 1, false);
+      restartAuto();
+    }, AUTO_SEC * 1000);
+  }
+
+  function updateModeBtn() {
+    var b = $("pgMode");
+    if (b) b.textContent = autoPage ? ("自动 " + AUTO_SEC + "s") : "手动";
+  }
+
+  function initPager() {
+    buildPager();
+    var saved = 0;
+    try {
+      saved = parseInt(localStorage.getItem("pd_page") || "0", 10) || 0;
+      autoPage = localStorage.getItem("pd_auto") !== "0";
+    } catch (e) {}
+    if (saved < 0 || saved >= pages.length) saved = 0;
+    updateModeBtn();
+    showPage(saved, false);
+    restartAuto();
+  }
+
+  $("pgPrev").addEventListener("click", function () { showPage(pageIdx - 1, true); });
+  $("pgNext").addEventListener("click", function () { showPage(pageIdx + 1, true); });
+  $("pgMode").addEventListener("click", function () {
+    autoPage = !autoPage;
+    try { localStorage.setItem("pd_auto", autoPage ? "1" : "0"); } catch (e) {}
+    updateModeBtn();
+    restartAuto();
+    showHint(autoPage ? ("自动轮播 · 每 " + AUTO_SEC + " 秒") : "手动换页");
+  });
+
   /* ---------------- 启动 ---------------- */
   var rt = null;
   function onViewportChange() {
@@ -1101,6 +1218,7 @@
     applyOrient();
     buildSkins();
     applyTheme(themeId);
+    initPager();
     fitCanvas();
     drawChart();
     loop();
