@@ -112,8 +112,8 @@
       "cpu   gpu   disk  proc"
       "cpu   mem   net   proc"
       "chart chart chart chart";
-    grid-template-rows:auto auto 1fr;
-    align-content:stretch;
+    grid-template-rows:auto auto auto;
+    align-content:start;
   }
   html[data-layout="wide"] .page[data-page="2"]{
     grid-template-columns:1fr 1fr;
@@ -330,7 +330,7 @@
   html[data-layout="wide"] .ring{width:112px;height:112px}
   html[data-layout="wide"] .ring-num b{font-size:30px}
   html[data-layout="wide"] .cores{height:20px;margin-top:9px}
-  html[data-layout="wide"] #chart{flex:1;height:auto;min-height:38px;margin-top:4px}
+  html[data-layout="wide"] #chart{flex:none;height:38px;min-height:38px;margin-top:4px}
   html[data-layout="wide"] .track{margin-top:7px}
   html[data-layout="wide"] .fine{margin-top:5px;font-size:10.5px}
 
@@ -781,7 +781,7 @@
     root.style.setProperty("--ew", (info.rot ? vh : vw) + "px");
     setText($("orientBtn"), ORIENT_LABEL[orientMode]);
     // 布局变了画布尺寸也会变
-    setTimeout(function () { fitCanvas(); drawChart(); }, 60);
+    setTimeout(function () { fitChartHeight(); fitCanvas(); drawChart(); }, 60);
   }
 
   var hintTimer = null;
@@ -1120,6 +1120,21 @@
     line(H.cpu, COL.cpu, true, 1);
   }
 
+  /* 横屏：量出真实剩余空间，把趋势图加高到刚好填满（不产生滚动） */
+  function fitChartHeight() {
+    var cv = $("chart");
+    if (!cv) return;
+    var wide = document.documentElement.getAttribute("data-layout") === "wide";
+    if (!wide) { cv.style.height = ""; return; }
+    cv.style.height = "38px";
+    var page = document.querySelector('.page[data-page="1"]');
+    if (!page || !page.classList.contains("active")) return;
+    var extra = page.clientHeight - page.scrollHeight;
+    if (extra > 4) {
+      cv.style.height = Math.min(38 + extra - 3, 132) + "px";
+    }
+  }
+
   /* ---------------- 渲染 ---------------- */
   var diskPillsKey = "";
 
@@ -1364,7 +1379,7 @@
     }
     // 趋势图在第 1 页，切回来时画布尺寸要从 0 恢复
     if (pages[pageIdx].getAttribute("data-page") === "1") {
-      setTimeout(function () { fitCanvas(); drawChart(); }, 60);
+      setTimeout(function () { fitChartHeight(); fitCanvas(); drawChart(); }, 60);
     }
   }
 
