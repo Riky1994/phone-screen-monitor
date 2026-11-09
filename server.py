@@ -42,8 +42,12 @@ try:  # 驱动自带的 NVML，读显卡不用起子进程
 except Exception:
     gpu_nvml = None  # type: ignore
 
+try:  # 从 RTSS 共享内存读游戏帧率（装了 MSI Afterburner 才有）
+    import fps_rtss  # type: ignore
+except Exception:
+    fps_rtss = None  # type: ignore
+
 # LibreHardwareMonitor 的可选数据源（用于 CPU 温度 / 风扇 / 功耗）
-LHM_URL = "http://127.0.0.1:8085/data.json"
 NO_WINDOW = 0x08000000 if os.name == "nt" else 0
 
 LOG_DIR = BASE / "logs"
@@ -121,7 +125,7 @@ def lan_ips() -> list[str]:
 
 
 def _num(raw: str | None):
-    """把 nvidia-smi / LHM 的字符串数值转成 float，无法解析返回 None。"""
+    """把 nvidia-smi 返回的字符串数值转成 float，无法解析返回 None。"""
     if raw is None:
         return None
     s = raw.strip()
@@ -177,60 +181,92 @@ def read_gpu():
     }
 
 
-def read_lhm():
-    """可选：从本机 LibreHardwareMonitor 网页服务读取 CPU 温度 / 风扇 / 功耗。"""
+# --------------------------------------------------------------------------- #
+# 电池 / 天气 / 帧率（第 3、2 页用）
+# --------------------------------------------------------------------------- #
+WMO_DESC = {
+    0: "晴", 1: "晴间多云", 2: "多云", 3: "阴", 45: "雾", 48: "雾凇",
+    51: "毛毛雨", 53: "毛毛雨", 55: "毛毛雨", 56: "冻雨", 57: "冻雨",
+    61: "小雨", 63: "中雨", 65: "大雨", 66: "冻雨", 67: "冻雨",
+    71: "小雪", 73: "中雪", 75: "大雪", 77: "雪粒",
+    80: "阵雨", 81: "阵雨", 82: "强阵雨", 85: "阵雪", 86: "阵雪",
+    95: "雷阵雨", 96: "雷阵雨伴冰雹", 99: "强雷暴",
+}
+
+_weather_cache = {"data": None, "ts": 0.0, "loc": None}
+
+
+def read_battery():
     try:
-        with urllib.request.urlopen(LHM_URL, timeout=1.0) as resp:
-            tree = json.loads(resp.read().decode("utf-8", "replace"))
+        b = psutil.sensors_battery()
     except Exception:
         return None
-
-    sensors: dict[str, tuple[str, float]] = {}
-
-    def walk(node):
-        if not isinstance(node, dict):
-            return
-        sid = node.get("SensorId") or ""
-        text = (node.get("Text") or "").strip()
-        val = _num(node.get("Value"))
-        if sid and val is not None:
-            sensors[sid] = (text, val)
-        for child in node.get("Children") or []:
-            walk(child)
-
-    walk(tree)
-    if not sensors:
+    if b is None:
         return None
+    left = None
+    try:
+        if not b.power_plugged and b.secsleft not in (
+            psutil.POWER_TIME_UNLIMITED, psutil.POWER_TIME_UNKNOWN
+        ):
+            left = int(b.secsleft)
+    except Exception:
+        pass
+    return {"pct": round(float(b.percent)), "plugged": bool(b.power_plugged), "left": left}
 
-    res = {"cpuTemp": None, "cpuPower": None, "gpuTemp": None, "gpuPower": None, "fan": None}
 
-    def pick(prefix: str, kind: str, names: tuple[str, ...]):
-        best = None
-        for sid, (text, val) in sensors.items():
-            if prefix not in sid.lower() or f"/{kind}/" not in sid.lower():
-                continue
-            if text in names:
-                return val
-            if best is None:
-                best = val
-        return best
+def _locate():
+    """用 IP 粗略定位，失败回落到北京。"""
+    for url in ("https://ipapi.co/json/", "http://ip-api.com/json/?fields=lat,lon,city"):
+        try:
+            with urllib.request.urlopen(url, timeout=6) as resp:
+                d = json.loads(resp.read().decode("utf-8", "replace"))
+            lat = d.get("latitude") or d.get("lat")
+            lon = d.get("longitude") or d.get("lon")
+            if lat and lon:
+                return float(lat), float(lon), str(d.get("city") or "")
+        except Exception:
+            continue
+    return 39.90, 116.40, ""
 
-    res["cpuTemp"] = pick("/cpu", "temperature", ("CPU Package", "Core (Tctl/Tdie)", "CPU (Tctl/Tdie)", "Core Average"))
-    if res["cpuTemp"] is None:
-        res["cpuTemp"] = pick("/cpu", "temperature", ())
-    res["cpuPower"] = pick("/cpu", "power", ("Package", "CPU Package", "Package Power"))
-    res["gpuTemp"] = pick("/gpu", "temperature", ("GPU Core", "GPU Hot Spot"))
-    res["gpuPower"] = pick("/gpu", "power", ("GPU Package", "GPU Power"))
 
-    fans = [
-        (val, text)
-        for sid, (text, val) in sensors.items()
-        if "/fan/" in sid.lower() and val and val > 0
-    ]
-    if fans:
-        fans.sort(key=lambda x: ("CPU" not in x[1].upper(), -x[0]))
-        res["fan"] = fans[0][0]
-    return res
+def read_weather():
+    """10 分钟缓存，取不到就返回上一次的结果。"""
+    now = time.time()
+    if _weather_cache["data"] is not None and now - _weather_cache["ts"] < 600:
+        return _weather_cache["data"]
+    _weather_cache["ts"] = now
+    try:
+        if _weather_cache["loc"] is None:
+            _weather_cache["loc"] = _locate()
+        lat, lon, city = _weather_cache["loc"]
+        url = (
+            "https://api.open-meteo.com/v1/forecast?latitude=%.4f&longitude=%.4f"
+            "&current=temperature_2m,apparent_temperature,relative_humidity_2m,"
+            "weather_code,wind_speed_10m&timezone=auto" % (lat, lon)
+        )
+        req = urllib.request.Request(url, headers={"User-Agent": "PhoneDeck/1.0"})
+        with urllib.request.urlopen(req, timeout=8) as resp:
+            d = json.loads(resp.read().decode("utf-8", "replace"))
+        cur = d.get("current") or {}
+        code = int(cur.get("weather_code", -1))
+        data = {
+            "city": city or "本地",
+            "temp": cur.get("temperature_2m"),
+            "feels": cur.get("apparent_temperature"),
+            "humidity": cur.get("relative_humidity_2m"),
+            "wind": cur.get("wind_speed_10m"),
+            "desc": WMO_DESC.get(code, "未知"),
+        }
+        _weather_cache["data"] = data
+        return data
+    except Exception:
+        return _weather_cache["data"]
+
+
+def read_fps():
+    if fps_rtss is None:
+        return None
+    return fps_rtss.read_fps()
 
 
 # --------------------------------------------------------------------------- #
@@ -264,7 +300,7 @@ class BackgroundPoller(threading.Thread):
             return self._data
 
 
-def make_top_reader(n: int = 5):
+def make_top_reader(n: int = 8):
     """进程 TOP（按整机 CPU 占比排序）。
 
     优先用一次内核查询（fastproc）：逐进程 OpenProcess 在本机被安全软件拖慢到
@@ -273,6 +309,8 @@ def make_top_reader(n: int = 5):
     """
     ncpu = psutil.cpu_count(logical=True) or 1
     state = {"prev": {}, "t": time.time()}
+    # System / Registry / 内存压缩 这类没有普通进程语义，列表里没意义
+    skip_names = {"system", "idle", "registry", "memory compression", "memcompression", "secure system"}
 
     def via_fastproc():
         rows = fastproc.list_processes()
@@ -284,12 +322,15 @@ def make_top_reader(n: int = 5):
         out = []
         for r in rows:
             pid = r["pid"]
+            name = r["name"] or "?"
             secs = r["cpu"] / 1e7  # 100ns -> 秒
             cur[pid] = secs
+            if pid <= 4 or name.lower() in skip_names:
+                continue
             before = prev.get(pid)
             share = 0.0 if before is None else (secs - before) / dt / ncpu * 100.0
             out.append({
-                "name": r["name"] or "?",
+                "name": name,
                 "pid": pid,
                 "cpu": round(max(0.0, share), 2),
                 "mem": r["ws"],
@@ -349,14 +390,21 @@ class Sampler:
             "restricted": False,
             "fan": None,
             "lhm": False,
+            "battery": None,
+            "weather": None,
+            "fps": None,
+            "ip": "",
         }
         self._prev_io = None
         self._prev_net = None
         self._net_down = 0
         self._net_up = 0
         self._gpu = BackgroundPoller(read_gpu, 1.0, "gpu")
-        self._lhm = BackgroundPoller(read_lhm, 2.0, "lhm")
-        self._procs = BackgroundPoller(make_top_reader(5), 2.0, "procs")
+        self._procs = BackgroundPoller(make_top_reader(8), 2.0, "procs")
+        self._batt = BackgroundPoller(read_battery, 10.0, "batt")
+        self._weather = BackgroundPoller(read_weather, 60.0, "weather")
+        self._fps = BackgroundPoller(read_fps, 1.0, "fps")
+        self._ip = (lan_ips() or [""])[0]
         self._prev_t = time.time()
         self._primary_nic = self._find_primary_nic()
 
@@ -382,8 +430,10 @@ class Sampler:
         self._data["os"] = f"{platform.system()} {platform.release()}"
         psutil.cpu_percent(interval=None, percpu=True)  # 预热
         self._gpu.start()
-        self._lhm.start()
         self._procs.start()
+        self._batt.start()
+        self._weather.start()
+        self._fps.start()
         tick = 0
         while True:
             try:
@@ -430,12 +480,6 @@ class Sampler:
 
         gpu = self._gpu.get()
         gpu = dict(gpu) if gpu else None
-        lhm = self._lhm.get()
-        cpu_temp = lhm["cpuTemp"] if lhm else None
-        cpu_power = lhm["cpuPower"] if lhm else None
-        fan = lhm["fan"] if lhm else None
-        if gpu and lhm and lhm.get("gpuTemp"):
-            gpu["temp"] = lhm["gpuTemp"] if not gpu.get("temp") else gpu["temp"]
 
         disks = []
         if tick % 5 == 0:
@@ -475,9 +519,8 @@ class Sampler:
             "cpu": {
                 "pct": round(sum(cores) / max(len(cores), 1), 1),
                 "cores": [round(c, 1) for c in cores],
-                "temp": cpu_temp,
-                "power": cpu_power,
                 "threads": len(cores),
+                "phys": psutil.cpu_count(logical=False) or len(cores),
             },
             "mem": {
                 "total": mem.total,
@@ -492,8 +535,12 @@ class Sampler:
             "top": top,
             "procs": nproc,
             "restricted": nproc < 40,
-            "fan": fan,
-            "lhm": bool(lhm),
+            "fan": None,
+            "lhm": False,
+            "battery": self._batt.get(),
+            "weather": self._weather.get(),
+            "fps": self._fps.get(),
+            "ip": self._ip,
         }
         with self._lock:
             self._data = data

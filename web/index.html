@@ -57,6 +57,7 @@
     min-height:100dvh;
     padding:calc(env(safe-area-inset-top) + 9px) 12px calc(env(safe-area-inset-bottom) + 16px);
     overflow-x:hidden;
+    display:flex;flex-direction:column;
   }
   html[data-rotate] .rotator{
     position:fixed;top:50%;left:50%;
@@ -71,42 +72,133 @@
   html[data-rotate="90"] .rotator{transform:translate(-50%,-50%) rotate(90deg)}
   html[data-rotate="-90"] .rotator{transform:translate(-50%,-50%) rotate(-90deg)}
 
-  /* ---------- 栅格 ---------- */
+  /* ---------- 栅格：分页 ---------- */
   .wrap{
-    max-width:540px;margin:0 auto;
-    display:grid;gap:10px;
+    max-width:540px;margin:0 auto;width:100%;
+    flex:1 0 auto;min-height:0;
+    display:flex;flex-direction:column;gap:10px;
+  }
+  .pages{flex:1 0 auto;min-height:0;display:flex;flex-direction:column}
+  .page{
+    display:none;gap:10px;
     grid-template-columns:minmax(0,1fr) minmax(0,1fr);
+    align-content:start;align-items:stretch;
+  }
+  .page.active{display:grid;flex:1 0 auto;min-height:0}
+  .page[data-page="1"]{
+    align-content:stretch;
     grid-template-areas:
-      "hdr  hdr"
       "cpu  cpu"
       "gpu  mem"
       "disk net"
       "chart chart"
       "proc proc";
-    align-content:start;
-    align-items:stretch;
+    grid-template-rows:auto auto auto 1fr auto;
   }
-  html[data-layout="wide"] .wrap{
-    max-width:1120px;
+  .page[data-page="2"]{grid-template-areas:
+      "fps  vram";}
+  .page[data-page="3"]{grid-template-areas:
+      "weather weather"
+      "battery info";}
+
+  html[data-layout="wide"] .wrap{max-width:1120px;gap:8px;justify-content:flex-start}
+  html[data-layout="wide"] .rotator{justify-content:flex-start;align-content:flex-start}
+  html[data-layout="wide"] .pages{justify-content:flex-start}
+  html[data-layout="wide"] .page.active{justify-content:flex-start;align-content:start;align-items:stretch}
+  html[data-layout="wide"] .page{
+    grid-template-columns:1.1fr 1fr 1fr;
+    gap:8px;align-content:stretch;
+  }
+  html[data-layout="wide"] .page[data-page="1"]{
     grid-template-columns:1.1fr 1fr 1fr 1.1fr;
     grid-template-areas:
-      "hdr   hdr   hdr   hdr"
       "cpu   gpu   disk  proc"
       "cpu   mem   net   proc"
       "chart chart chart chart";
-    gap:8px;
+    grid-template-rows:5fr 5fr 6fr;
     align-content:stretch;
   }
+  html[data-layout="wide"] .page[data-page="2"]{
+    grid-template-columns:1fr 1fr;
+    grid-template-areas:"fps  vram";}
+  html[data-layout="wide"] .page[data-page="3"]{grid-template-areas:
+      "weather battery info";}
   .card-cpu{grid-area:cpu}
   .card-gpu{grid-area:gpu}
   .card-mem{grid-area:mem}
   .card-disk{grid-area:disk}
   .card-net{grid-area:net}
-  .card-chart{grid-area:chart}
+  .card-chart{grid-area:chart;display:flex;flex-direction:column;min-height:0}
   .card-proc{grid-area:proc}
+  .card-fps{grid-area:fps}
+  .card-vram{grid-area:vram}
+  .card-weather{grid-area:weather}
+  .card-battery{grid-area:battery}
+  .card-info{grid-area:info}
+
+  /* 两列小指标网格（系统信息卡） */
+  .statgrid{display:grid;grid-template-columns:1fr 1fr;gap:10px 14px;margin-top:10px}
+  .statgrid .st{border:0;padding:0;flex-direction:column;align-items:flex-start;gap:2px}
+  .statgrid .st span{font-size:10.5px}
+  .statgrid .st b{font-size:16px}
+
+  /* 天气小动画：只用 transform / opacity，旧手机也不吃力 */
+  .wx-art{position:absolute;right:14px;top:26px;width:40px;height:40px;pointer-events:none;opacity:.95}
+  .wx-art svg{width:100%;height:100%;overflow:visible}
+  .wx-art g{display:none}
+  .wx-art .wx-sun circle{fill:var(--amber)}
+  .wx-art .wx-rays line{stroke:var(--amber);stroke-width:2.4;stroke-linecap:round}
+  .wx-art .wx-cloud path{fill:var(--dim);opacity:.9}
+  .wx-art .wx-drops line{stroke:var(--cyan);stroke-width:2.6;stroke-linecap:round}
+  .wx-art .wx-flake circle{fill:#cfe9ff}
+  .wx-art .wx-bolt path{fill:var(--amber)}
+
+  .card-weather[data-w="clear"] .wx-sun,
+  .card-weather[data-w="partly"] .wx-sun,
+  .card-weather[data-w="partly"] .wx-cloud,
+  .card-weather[data-w="cloud"] .wx-cloud,
+  .card-weather[data-w="fog"] .wx-cloud,
+  .card-weather[data-w="rain"] .wx-cloud,
+  .card-weather[data-w="rain"] .wx-drops,
+  .card-weather[data-w="thunder"] .wx-cloud,
+  .card-weather[data-w="thunder"] .wx-bolt,
+  .card-weather[data-w="snow"] .wx-cloud,
+  .card-weather[data-w="snow"] .wx-flake{display:block}
+
+  .card-weather[data-w="clear"] .wx-rays,
+  .card-weather[data-w="partly"] .wx-rays{
+    transform-box:view-box;transform-origin:24px 22px;animation:wxSpin 26s linear infinite;
+  }
+  @keyframes wxSpin{to{transform:rotate(360deg)}}
+
+  .card-weather[data-w="partly"] .wx-cloud,
+  .card-weather[data-w="cloud"] .wx-cloud,
+  .card-weather[data-w="fog"] .wx-cloud{animation:wxDrift 7s ease-in-out infinite}
+  @keyframes wxDrift{0%,100%{transform:translateX(-1.5px)}50%{transform:translateX(2.5px)}}
+
+  .card-weather[data-w="rain"] .wx-drops line{animation:wxFall 1.15s linear infinite}
+  .card-weather[data-w="rain"] .wx-drops line:nth-child(2){animation-delay:.38s}
+  .card-weather[data-w="rain"] .wx-drops line:nth-child(3){animation-delay:.76s}
+  @keyframes wxFall{0%{transform:translateY(-3px);opacity:0}25%{opacity:1}100%{transform:translateY(7px);opacity:0}}
+
+  .card-weather[data-w="snow"] .wx-flake circle{animation:wxSnow 3.2s ease-in-out infinite}
+  .card-weather[data-w="snow"] .wx-flake circle:nth-child(2){animation-delay:1.1s}
+  .card-weather[data-w="snow"] .wx-flake circle:nth-child(3){animation-delay:2.1s}
+  @keyframes wxSnow{0%{transform:translateY(-2px);opacity:.15}55%{opacity:1}100%{transform:translateY(6px);opacity:.15}}
+
+  .card-weather[data-w="thunder"] .wx-bolt{animation:wxFlash 2.8s ease-in-out infinite}
+  @keyframes wxFlash{0%,86%,100%{opacity:.2}89%,93%{opacity:1}}
+
+  /* 换页滑入动画 */
+  .page.active.slide-l{animation:pgL .24s cubic-bezier(.2,.8,.3,1)}
+  .page.active.slide-r{animation:pgR .24s cubic-bezier(.2,.8,.3,1)}
+  @keyframes pgL{from{opacity:.35;transform:translateX(28px)}to{opacity:1;transform:none}}
+  @keyframes pgR{from{opacity:.35;transform:translateX(-28px)}to{opacity:1;transform:none}}
+
+
 
   /* ---------- 顶栏 ---------- */
-  .hdr{grid-area:hdr;display:flex;align-items:center;justify-content:space-between;padding:0 3px 1px;gap:8px}
+  .hdr{display:flex;align-items:center;justify-content:space-between;padding:0 3px 1px;gap:8px}
   .hdr-l{display:flex;align-items:center;gap:7px;min-width:0}
   .live{width:7px;height:7px;border-radius:50%;background:var(--green);box-shadow:0 0 9px var(--green);flex:none;transition:.3s}
   .live.off{background:#ff5d6c;box-shadow:0 0 9px #ff5d6c}
@@ -223,10 +315,10 @@
   .legend .c{background:var(--cyan);box-shadow:0 0 6px rgba(46,230,255,.7)}
   .legend .g{background:var(--green);box-shadow:0 0 6px rgba(110,242,164,.6)}
   .legend .m{background:var(--amber);box-shadow:0 0 6px rgba(255,179,92,.6)}
-  #chart{width:100%;height:98px;display:block;margin-top:8px}
+  #chart{width:100%;flex:1;min-height:84px;display:block;margin-top:8px}
 
   /* ---------- 进程 ---------- */
-  .procs{display:flex;flex-direction:column;gap:5px;margin-top:9px}
+  .procs{display:flex;flex-direction:column;gap:4px;margin-top:8px}
   .proc{display:grid;grid-template-columns:minmax(0,1fr) 54px 46px;gap:8px;align-items:center;font-size:12px}
   .proc .n{color:#c4d2e3;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .proc .v{color:var(--dim2);text-align:right;font-variant-numeric:tabular-nums;font-size:11px}
@@ -234,14 +326,19 @@
   .proc.ghost .c{color:var(--dim2)}
 
   /* ---------- 横屏紧凑化：一屏放下全部卡片 ---------- */
-  html[data-layout="wide"] .card{padding:9px 12px 10px;border-radius:16px}
+  html[data-layout="wide"] .card{padding:7px 11px 8px;border-radius:14px}
+  html[data-layout="wide"] .card-mem,
+  html[data-layout="wide"] .card-disk,
+  html[data-layout="wide"] .card-net,
+  html[data-layout="wide"] .card-fps,
+  html[data-layout="wide"] .card-vram{display:flex;flex-direction:column;justify-content:center}
   html[data-layout="wide"] .lbl{font-size:10px;gap:5px}
-  html[data-layout="wide"] .big b{font-size:30px}
+  html[data-layout="wide"] .big b{font-size:28px}
   html[data-layout="wide"] .big{margin-top:2px}
   html[data-layout="wide"] .ring{width:112px;height:112px}
   html[data-layout="wide"] .ring-num b{font-size:30px}
   html[data-layout="wide"] .cores{height:20px;margin-top:9px}
-  html[data-layout="wide"] #chart{height:clamp(46px,calc(var(--eh,400px) * .16),74px);margin-top:6px}
+  html[data-layout="wide"] #chart{flex:1 1 0;height:0;min-height:40px;margin-top:4px}
   html[data-layout="wide"] .track{margin-top:7px}
   html[data-layout="wide"] .fine{margin-top:5px;font-size:10.5px}
 
@@ -266,6 +363,7 @@
 
   /* 磁盘：其余盘符的胶囊在横屏收起，只留主盘和读写速度 */
   html[data-layout="wide"] .card-disk .pills{display:none}
+  html[data-layout="wide"] .card-disk .io{display:none}
   html[data-layout="wide"] .card-net .netrows{gap:4px;margin-top:6px}
 
   /* 进程列较窄，压缩数值列宽 */
@@ -283,6 +381,12 @@
   .hint{background:rgba(46,230,255,.12);border:1px solid rgba(46,230,255,.3);color:#a8ecff}
   .toast.show,.hint.show{opacity:1;transform:translateX(-50%) translateY(0)}
 
+
+  /* 调试面板：地址带 #dbg 才显示 */
+  #dbg{display:none}
+  #dbg.on{display:block;position:fixed;left:6px;top:6px;z-index:99;white-space:pre;
+    font:10px/1.35 ui-monospace,monospace;color:#6f6;background:rgba(0,0,0,.72);
+    padding:5px 7px;border-radius:6px;pointer-events:none}
   /* ================= 皮肤 ================= */
   /* 深空：原本的青/绿/琥珀 */
   html[data-theme="space"]{
@@ -466,6 +570,11 @@
       </div>
     </header>
 
+    <main class="pages">
+
+      <!-- ========== 第 1 页：全部七个板块（原版布局） ========== -->
+      <section class="page active" data-page="1">
+
     <!-- CPU -->
     <section class="card card-cpu">
       <div class="lbl">CPU <span class="sub" id="cpuModel"></span></div>
@@ -484,8 +593,8 @@
           <div class="ring-num"><b id="cpuPct">0</b><i>%</i></div>
         </div>
         <div class="hero-stats">
-          <div class="st"><span>温度</span><b id="cpuTemp" class="na">—</b></div>
-          <div class="st"><span>功耗</span><b id="cpuPower" class="na">—</b></div>
+          <div class="st"><span>最高核心</span><b id="cpuMax">—</b></div>
+          <div class="st"><span>核心</span><b id="cpuPhys">—</b></div>
           <div class="st"><span>线程</span><b id="cpuThreads">—</b></div>
         </div>
       </div>
@@ -512,6 +621,19 @@
       <div class="fine"><span id="memTxt">—</span><span id="memFree"></span></div>
     </section>
 
+    <!-- 趋势 -->
+    <section class="card card-chart">
+      <div class="lbl">趋势
+        <span class="sub">近 120 秒</span>
+        <div class="legend">
+          <em><i class="c"></i>CPU</em>
+          <em><i class="g"></i>GPU</em>
+          <em><i class="m"></i>内存</em>
+        </div>
+      </div>
+      <canvas id="chart"></canvas>
+    </section>
+
     <!-- 磁盘 -->
     <section class="card card-disk">
       <div class="lbl">磁盘 <span class="sub">C:</span></div>
@@ -532,27 +654,103 @@
       <div class="fine"><span id="netNote"></span></div>
     </section>
 
-    <!-- 趋势 -->
-    <section class="card card-chart">
-      <div class="lbl">趋势
-        <span class="sub">近 120 秒</span>
-        <div class="legend">
-          <em><i class="c"></i>CPU</em>
-          <em><i class="g"></i>GPU</em>
-          <em><i class="m"></i>内存</em>
-        </div>
-      </div>
-      <canvas id="chart"></canvas>
-    </section>
-
     <!-- 进程 -->
     <section class="card card-proc">
       <div class="lbl">进程 TOP <span class="sub" id="procCount"></span></div>
       <div class="procs" id="procList"></div>
     </section>
 
+      </section><!-- /第 1 页 -->
+
+      <!-- ========== 第 2 页：游戏性能 ========== -->
+      <section class="page" data-page="2">
+
+    <!-- 帧率 -->
+    <section class="card card-fps">
+      <div class="lbl">帧率 <span class="sub" id="fpsApp"></span></div>
+      <div class="big"><b id="fpsVal">—</b><i>FPS</i></div>
+      <div class="fine"><span id="fpsHint">需 RTSS</span></div>
+    </section>
+
+    <!-- 显存与频率 -->
+    <section class="card card-vram">
+      <div class="lbl">显存与频率</div>
+      <div class="big"><b id="vPct">0</b><i>%</i></div>
+      <div class="track"><div class="fill gpu" id="vBar"></div></div>
+      <div class="fine"><span id="vTxt">—</span></div>
+      <div class="mini">
+        <div class="st"><span>核心</span><b id="vClk">—</b></div>
+        <div class="st"><span>显存</span><b id="vClkMem">—</b></div>
+      </div>
+    </section>
+
+      </section><!-- /第 2 页 -->
+
+      <!-- ========== 第 3 页：生活 ========== -->
+      <section class="page" data-page="3">
+
+    <!-- 天气 -->
+    <section class="card card-weather" id="wxCard" data-w="cloud">
+      <div class="lbl">天气 <span class="sub" id="wxCity"></span></div>
+      <div class="wx-art" aria-hidden="true">
+        <svg viewBox="0 0 48 48">
+          <g class="wx-sun">
+            <circle cx="24" cy="22" r="7"/>
+            <g class="wx-rays">
+              <line x1="24" y1="6" x2="24" y2="11"/><line x1="24" y1="33" x2="24" y2="38"/>
+              <line x1="8" y1="22" x2="13" y2="22"/><line x1="35" y1="22" x2="40" y2="22"/>
+              <line x1="12" y1="10" x2="16" y2="14"/><line x1="32" y1="30" x2="36" y2="34"/>
+              <line x1="36" y1="10" x2="32" y2="14"/><line x1="16" y1="30" x2="12" y2="34"/>
+            </g>
+          </g>
+          <g class="wx-cloud">
+            <path d="M13 31h20a7 7 0 0 0 0-14 9 9 0 0 0-17 3 6 6 0 0 0-3 11z"/>
+          </g>
+          <g class="wx-drops">
+            <line x1="18" y1="34" x2="16" y2="41"/><line x1="25" y1="34" x2="23" y2="41"/>
+            <line x1="32" y1="34" x2="30" y2="41"/>
+          </g>
+          <g class="wx-flake">
+            <circle cx="18" cy="37" r="1.6"/><circle cx="25" cy="40" r="1.6"/>
+            <circle cx="32" cy="36" r="1.6"/>
+          </g>
+          <g class="wx-bolt"><path d="M25 30l-5 9h4l-2 7 8-11h-4l2-5z"/></g>
+        </svg>
+      </div>
+      <div class="big"><b id="wxTemp">—</b><i>°C</i></div>
+      <div class="fine"><span id="wxDesc">—</span><span id="wxFeels"></span></div>
+      <div class="mini">
+        <div class="st"><span>湿度</span><b id="wxHum">—</b></div>
+        <div class="st"><span>风速</span><b id="wxWind">—</b></div>
+      </div>
+    </section>
+
+    <!-- 电池 -->
+    <section class="card card-battery">
+      <div class="lbl">电池 <span class="sub" id="batState"></span></div>
+      <div class="big"><b id="batPct">—</b><i>%</i></div>
+      <div class="track"><div class="fill mem" id="batBar"></div></div>
+      <div class="fine"><span id="batLeft">—</span></div>
+    </section>
+
+    <!-- 系统信息 -->
+    <section class="card card-info">
+      <div class="lbl">系统 <span class="sub" id="infoHost"></span></div>
+      <div class="statgrid">
+        <div class="st"><span>运行</span><b id="infoUp">—</b></div>
+        <div class="st"><span>系统</span><b id="infoOs">—</b></div>
+        <div class="st"><span>局域网</span><b id="infoIp">—</b></div>
+        <div class="st"><span>进程</span><b id="infoProc">—</b></div>
+      </div>
+    </section>
+
+      </section><!-- /第 3 页 -->
+
+    </main>
+
   </div>
 
+  <div id="dbg"></div>
   <div class="toast" id="toast">连接中断 · 正在重试</div>
   <div class="hint" id="hint"></div>
 
@@ -611,6 +809,7 @@
     clearTimeout(hintTimer);
     hintTimer = setTimeout(function () { el.classList.remove("show"); }, 1400);
   }
+
 
   /* ================= 皮肤 ================= */
   var THEMES = [
@@ -791,6 +990,29 @@
     setText(el, txt);
   }
 
+  function setMetric(el, v, unit, decimals) {
+    if (!el) return;
+    if (v == null || isNaN(v)) {
+      setText(el, "—");
+      el.classList.add("na");
+    } else {
+      setText(el, (decimals ? Number(v).toFixed(decimals) : Math.round(v)) + unit);
+      el.classList.remove("na");
+    }
+  }
+
+  // 把天气描述归到动画类型：sun / partly / cloud / rain / snow / thunder / fog
+  function wxCategory(desc) {
+    if (!desc) return "cloud";
+    if (desc.indexOf("雷") >= 0) return "thunder";
+    if (desc.indexOf("雪") >= 0) return "snow";
+    if (desc.indexOf("雨") >= 0) return "rain";
+    if (desc.indexOf("雾") >= 0) return "fog";
+    if (desc.indexOf("晴间") >= 0) return "partly";
+    if (desc.indexOf("晴") >= 0) return "clear";
+    return "cloud";
+  }
+
   /* ---------------- 圆环 / 进度条 ---------------- */
   var ring = $("cpuRing");
   ring.style.strokeDasharray = RING_C.toFixed(2);
@@ -872,15 +1094,17 @@
     return "rgba(" + ((n >> 16) & 255) + "," + ((n >> 8) & 255) + "," + (n & 255) + "," + a + ")";
   }
 
-  function line(data, color, fill, alpha) {
+  // 在一条水平带内画折线：top/height 是该带的上下边界
+  function line(data, color, fill, alpha, top, height) {
     if (data.length < 2) return;
     var n = data.length, step = CW / (HIST - 1);
     var x0 = CW - (n - 1) * step;
+    var base = top + height;
     ctx.globalAlpha = (alpha == null ? 1 : alpha);
     ctx.beginPath();
     for (var i = 0; i < n; i++) {
       var x = x0 + i * step;
-      var y = CHh - (Math.max(0, Math.min(100, data[i])) / 100) * (CHh - 2) - 1;
+      var y = base - (Math.max(0, Math.min(100, data[i])) / 100) * (height - 3) - 2;
       if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
     }
     ctx.strokeStyle = color;
@@ -889,10 +1113,10 @@
     ctx.stroke();
 
     if (fill) {
-      ctx.lineTo(x0 + (n - 1) * step, CHh);
-      ctx.lineTo(x0, CHh);
+      ctx.lineTo(x0 + (n - 1) * step, base - 1);
+      ctx.lineTo(x0, base - 1);
       ctx.closePath();
-      var g = ctx.createLinearGradient(0, 0, 0, CHh);
+      var g = ctx.createLinearGradient(0, top, 0, base);
       g.addColorStop(0, hexA(color, 0.22));
       g.addColorStop(1, hexA(color, 0));
       ctx.fillStyle = g;
@@ -904,16 +1128,28 @@
   function drawChart() {
     if (!CW) return;
     ctx.clearRect(0, 0, CW, CHh);
-    ctx.strokeStyle = COL.grid;
+
+    // 三条独立泳道：上 CPU / 中 GPU / 下 内存
+    var lanes = 3, lh = CHh / lanes;
     ctx.lineWidth = 1;
-    for (var i = 0; i <= 4; i++) {
-      var y = Math.round(CHh * i / 4) + 0.5;
-      ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(CW, y); ctx.stroke();
+    ctx.strokeStyle = "rgba(255,255,255,.07)";
+    for (var i = 1; i < lanes; i++) {
+      var ys = Math.round(lh * i) + 0.5;
+      ctx.beginPath(); ctx.moveTo(0, ys); ctx.lineTo(CW, ys); ctx.stroke();
     }
-    line(H.mem, COL.mem, false, 0.55);
-    line(H.gpu, COL.gpu, false, 0.6);
-    line(H.cpu, COL.cpu, true, 1);
+    ctx.strokeStyle = "rgba(255,255,255,.035)";
+    for (var j = 0; j < lanes; j++) {
+      var ym = Math.round(lh * j + lh / 2) + 0.5;
+      ctx.beginPath(); ctx.moveTo(0, ym); ctx.lineTo(CW, ym); ctx.stroke();
+    }
+
+    line(H.cpu, COL.cpu, true, 1, 0, lh);
+    line(H.gpu, COL.gpu, false, 0.9, lh, lh);
+    line(H.mem, COL.mem, false, 0.9, lh * 2, lh);
   }
+
+
+
 
   /* ---------------- 渲染 ---------------- */
   var diskPillsKey = "";
@@ -930,11 +1166,10 @@
     setNum($("cpuPct"), cpu.pct, 0);
     setRing(cpu.pct);
     setText($("cpuThreads"), (cpu.threads || 0) + " 线程");
-    var ct = $("cpuTemp"), cp = $("cpuPower");
-    if (cpu.temp == null) { setText(ct, "—"); ct.classList.add("na"); }
-    else { setText(ct, Math.round(cpu.temp) + "°C"); ct.classList.remove("na"); }
-    if (cpu.power == null) { setText(cp, "—"); cp.classList.add("na"); }
-    else { setText(cp, cpu.power.toFixed(1) + " W"); cp.classList.remove("na"); }
+    setText($("cpuPhys"), (cpu.phys || 0) + " 核");
+    var peak = 0;
+    (cpu.cores || []).forEach(function (v) { if (v > peak) peak = v; });
+    setText($("cpuMax"), Math.round(peak) + "%");
     setCores(cpu.cores || []);
 
     // GPU
@@ -1010,6 +1245,51 @@
       var dd = new Date(d.t * 1000);
       setText($("clock"), ("0" + dd.getHours()).slice(-2) + ":" + ("0" + dd.getMinutes()).slice(-2));
     }
+
+    // ---- 第 2 页：帧率 / 显存 ----
+    var fps = d.fps;
+    setText($("fpsVal"), fps && fps.fps != null ? String(Math.round(fps.fps)) : "—");
+    setText($("fpsApp"), fps ? (fps.app || "") : "");
+    setText($("fpsHint"), fps ? "RTSS" : "需 MSI Afterburner / RTSS");
+
+    var vramP2 = (g.memUsed != null && g.memTotal) ? (g.memUsed / g.memTotal * 100) : 0;
+    setNum($("vPct"), vramP2, 0);
+    setBar($("vBar"), vramP2);
+    setText($("vTxt"), g.memUsed != null
+      ? (g.memUsed / 1024).toFixed(1) + " / " + (g.memTotal / 1024).toFixed(1) + " GB" : "—");
+    setText($("vClk"), g.clock ? Math.round(g.clock) + " MHz" : "—");
+    setText($("vClkMem"), g.clockMem ? Math.round(g.clockMem) + " MHz" : "—");
+
+    // ---- 第 3 页：天气 / 电池 / 系统 ----
+    var wx = d.weather;
+    if (wx) {
+      setText($("wxCity"), wx.city || "");
+      setText($("wxTemp"), wx.temp != null ? String(Math.round(wx.temp)) : "—");
+      setText($("wxDesc"), wx.desc || "—");
+      setText($("wxFeels"), wx.feels != null ? ("体感 " + Math.round(wx.feels) + "°") : "");
+      setText($("wxHum"), wx.humidity != null ? wx.humidity + "%" : "—");
+      setText($("wxWind"), wx.wind != null ? Number(wx.wind).toFixed(1) + " km/h" : "—");
+      var card = $("wxCard");
+      if (card) card.setAttribute("data-w", wxCategory(wx.desc));
+    }
+
+    var bat = d.battery;
+    if (bat) {
+      setText($("batPct"), String(Math.round(bat.pct)));
+      setBar($("batBar"), bat.pct);
+      setText($("batState"), bat.plugged ? "充电中" : "放电中");
+      setText($("batLeft"), bat.plugged
+        ? "已接通电源"
+        : (bat.left != null
+            ? "剩余 " + Math.floor(bat.left / 3600) + " 小时 " + Math.floor(bat.left % 3600 / 60) + " 分"
+            : "—"));
+    }
+
+    setText($("infoHost"), d.host || "");
+    setText($("infoUp"), uptimeTxt(d.uptime).replace("已运行 ", ""));
+    setText($("infoOs"), d.os || "—");
+    setText($("infoIp"), d.ip || "—");
+    setText($("infoProc"), String(d.procs || 0));
 
     // 历史
     push(H.cpu, cpu.pct); push(H.gpu, g.util == null ? 0 : g.util); push(H.mem, m.pct);
@@ -1088,6 +1368,102 @@
     if (document.visibilityState === "visible" && !wakeLock) keepAwake();
   });
 
+  /* ================= 分页（纯手动滑动，无任何按钮） ================= */
+  var pages = [];
+  var pageIdx = 0;
+  var PAGE_NAME = { "1": "系统状态", "2": "游戏性能", "3": "生活信息" };
+
+  function showPage(i, dir, announce) {
+    if (!pages.length) return;
+    var prev = pageIdx;
+    pageIdx = (i % pages.length + pages.length) % pages.length;
+    pages.forEach(function (p, k) {
+      var on = k === pageIdx;
+      p.classList.toggle("active", on);
+      if (on) {
+        p.classList.remove("slide-l", "slide-r");
+        if (prev !== pageIdx) {
+          void p.offsetWidth;  // 强制重排，保证动画能重复触发
+          p.classList.add((dir || 1) > 0 ? "slide-l" : "slide-r");
+        }
+      }
+    });
+    try { localStorage.setItem("pd_page", String(pageIdx)); } catch (e) {}
+    if (announce && prev !== pageIdx) {
+      var key = pages[pageIdx].getAttribute("data-page");
+      showHint("第 " + (pageIdx + 1) + " 页 · " + (PAGE_NAME[key] || ""));
+    }
+    // 趋势图在第 1 页，切回来时画布尺寸要从 0 恢复
+    if (pages[pageIdx].getAttribute("data-page") === "1") {
+      setTimeout(function () { fitCanvas(); drawChart(); }, 60);
+    }
+  }
+
+  function initPager() {
+    pages = Array.prototype.slice.call(document.querySelectorAll(".page"));
+    var saved = 0;
+    try { saved = parseInt(localStorage.getItem("pd_page") || "0", 10) || 0; } catch (e) {}
+    if (saved < 0 || saved >= pages.length) saved = 0;
+    showPage(saved, 1, false);
+  }
+
+  /* 手势翻页：在旋转模式下要把屏幕坐标换算回内容坐标 */
+  var swipe = { x: 0, y: 0, active: false };
+
+  function contentDelta(dx, dy) {
+    var rot = document.documentElement.getAttribute("data-rotate");
+    if (rot === "90") return { dx: dy, dy: -dx };
+    if (rot === "-90") return { dx: -dy, dy: dx };
+    return { dx: dx, dy: dy };
+  }
+
+  var pagesBox = document.querySelector(".pages");
+  if (pagesBox) {
+    pagesBox.addEventListener("touchstart", function (e) {
+      if (e.touches.length !== 1) return;
+      swipe.x = e.touches[0].clientX;
+      swipe.y = e.touches[0].clientY;
+      swipe.active = true;
+    }, { passive: true });
+
+    pagesBox.addEventListener("touchend", function (e) {
+      if (!swipe.active || !e.changedTouches.length) return;
+      swipe.active = false;
+      var d = contentDelta(
+        e.changedTouches[0].clientX - swipe.x,
+        e.changedTouches[0].clientY - swipe.y
+      );
+      // 左滑（内容坐标 dx<0）翻到下一页；横向要明显大于纵向，避免误触
+      if (Math.abs(d.dx) < 45 || Math.abs(d.dx) < Math.abs(d.dy) * 1.2) return;
+      showPage(pageIdx + (d.dx < 0 ? 1 : -1), d.dx < 0 ? 1 : -1, true);
+    }, { passive: true });
+  }
+
+  /* 调试面板 */
+  (function () {
+    if (location.hash !== "#dbg") return;
+    var el = document.getElementById("dbg");
+    if (!el) return;
+    el.classList.add("on");
+    setInterval(function () {
+      var r = document.querySelector(".rotator");
+      var w = document.querySelector(".wrap");
+      var p = document.querySelector(".page.active");
+      var c = document.querySelector(".page.active .card");
+      var rb = r.getBoundingClientRect(), wb = w.getBoundingClientRect();
+      var pb = p.getBoundingClientRect(), cb = c ? c.getBoundingClientRect() : { top: -1 };
+      el.textContent = [
+        "win " + window.innerWidth + "x" + window.innerHeight,
+        "rot " + (document.documentElement.getAttribute("data-rotate") || "0") +
+          "  layout " + document.documentElement.getAttribute("data-layout"),
+        "rotator top " + Math.round(rb.top) + "  h " + Math.round(rb.height),
+        "wrap    top " + Math.round(wb.top) + "  h " + Math.round(wb.height),
+        "page    top " + Math.round(pb.top) + "  h " + Math.round(pb.height),
+        "card    top " + Math.round(cb.top)
+      ].join("\n");
+    }, 400);
+  })();
+
   /* ---------------- 启动 ---------------- */
   var rt = null;
   function onViewportChange() {
@@ -1101,6 +1477,7 @@
     applyOrient();
     buildSkins();
     applyTheme(themeId);
+    initPager();
     fitCanvas();
     drawChart();
     loop();

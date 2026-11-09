@@ -69,7 +69,8 @@ if (-not $SkipShortcut) {
         $sc = $ws.CreateShortcut($lnk)
         $sc.TargetPath = Join-Path $root "启动看板.bat"
         $sc.WorkingDirectory = $root
-        $sc.IconLocation = "C:\Windows\System32\imageres.dll,77"
+        $icon = Join-Path $root "app.ico"
+        $sc.IconLocation = if (Test-Path $icon) { "$icon,0" } else { "C:\Windows\System32\imageres.dll,77" }
         $sc.Description = "手机屏监控电脑性能 - 一键启动看板"
         $sc.Save()
         Write-Host "  快捷方式: $lnk" -ForegroundColor Green

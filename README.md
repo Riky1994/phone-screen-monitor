@@ -37,6 +37,13 @@
   - **横屏**：强制按横屏排版。如果手机锁定了竖屏（或浏览器不跟随旋转），画面会**整体旋转 90° 显示**，把手机横过来放就是正的
   - **竖屏**：强制竖屏排版；在横着放的车机/平板上也能转正
   - 横屏不是把竖屏拉伸，而是换成 4 列并排布局：**左列 CPU 通栏（圆环 + 每核柱条），右列进程 TOP 通栏，中间两列是 GPU / 内存 / 磁盘 / 网络四个卡片，趋势图横跨底部**——一屏之内全部显示，不需要滚动
+- **分页**：三页，**只能左右滑动翻页，页面上没有任何按钮**
+  - **第 1 页「系统」**：CPU 圆环与每核柱条、GPU、内存、磁盘、网络、120 秒趋势、进程 TOP（原版七板块）
+  - **第 2 页「游戏」**：帧率、显存与频率
+  - **第 3 页「生活」**：天气、电池、系统信息
+  - 翻页时底部会短暂浮出「第 2 页 · 游戏性能」，1.4 秒后自己消失
+  - **不自动翻页**；横屏被旋转时按内容方向判断，不会滑反
+  - 当前停在哪一页会记住
 - **皮肤**：右上角 `◐` 按钮打开皮肤面板，五款一键切换，选择会记住：
   | 皮肤 | 风格 |
   |---|---|
@@ -80,19 +87,27 @@
 |---|---|---|
 | CPU 占用 / 每核 / 线程数 | psutil（Windows 系统计数器） | 否 |
 | 内存 / 交换分区 | psutil | 否 |
-| 显卡占用 / 温度 / 显存 / 功耗 / 频率 | `nvidia-smi`（NVIDIA 驱动自带） | 否 |
+| 显卡占用 / 温度 / 显存 / 功耗 / 频率 | NVML（驱动自带 `nvml.dll`，无子进程） | 否 |
 | 磁盘容量 / 读写速度 | psutil | 否 |
 | 网络上下行 | psutil（自动识别主网卡） | 否 |
-| 进程 TOP | psutil | 否 |
-| **CPU 温度 / 功耗 / 风扇** | 需要可选的 LibreHardwareMonitor | 是（见下） |
+| 进程 TOP | 一次内核查询（`fastproc.py`） | 否 |
+| 电池电量 / 充电状态 | psutil | 否 |
+| 天气 | [open-meteo](https://open-meteo.com/)（免费、无需 key），IP 粗定位所在城市 | 否 |
+| **帧率 FPS** | RTSS 共享内存（需装 MSI Afterburner / RivaTuner） | 否 |
 
-CPU 温度那一栏现在显示 `—` 是正常的：Windows 不对外开放 CPU 温度，需要额外工具。
+帧率显示 `—` 是正常的：Windows 没有全局帧率接口，需要 RTSS 这类工具提供。
 
-### 想看到 CPU 温度？（可选）
+### 补上游戏帧率（一键脚本）
 
-1. 下载 [LibreHardwareMonitor](https://github.com/LibreHardwareMonitor/LibreHardwareMonitor/releases)（开源，选 `LibreHardwareMonitor.zip`），解压后以**管理员身份**运行
-2. 在它的菜单里打开 **Options → Remote Web Server → Run**（记住端口，默认 8085）
-3. 回到看板页面刷新一下，CPU 温度和功耗就会自动出现（看板会自己去读 `http://127.0.0.1:8085/data.json`）
+看板里 **帧率** 默认显示 `—`，因为 Windows 本身不提供这个接口。
+
+**`启用帧率FPS.bat`**
+1. 双击运行 → 浏览器打开 MSI Afterburner 官方下载页（MSI 禁止程序自动下载，只能手动下）
+2. 安装时**务必勾选 RivaTuner Statistics Server**
+3. 让 RTSS 常驻后台（托盘粉色小图标），脚本会自动检测到并提示接通
+4. 进游戏后看板第 2 页就会显示 FPS
+
+> 帧率不是系统接口，只能由 RTSS 这类工具写进共享内存，看板从那里读取。
 
 不需要的话忽略即可，其它指标都能正常用。
 
@@ -140,7 +155,7 @@ CPU 温度那一栏现在显示 `—` 是正常的：Windows 不对外开放 CPU
 - [Pitikapp](https://github.com/Pitikapp/pitikapp) —— 老手机变身 PC 副屏/监控的成熟方案：Android App + PC 端服务，可视化拖拽做仪表盘，还能当 Stream Deck 用
 - [PcHWmonitor](https://github.com/Xeakaes/PcHWmonitor) —— 单文件 Windows 服务端（内嵌 LibreHardwareMonitor）+ Jetpack Compose 安卓端，走局域网推送
 - [PixelDeck](https://github.com/danishayman/PixelDeck) —— 把旧手机做成像素风桌面看板（时钟/PC 状态/天气），走 USB
-- [LibreHardwareMonitor](https://github.com/LibreHardwareMonitor/LibreHardwareMonitor) —— 开源硬件传感器读取，自带 Web 服务器，本项目用它可选地补 CPU 温度
+- [LibreHardwareMonitor](https://github.com/LibreHardwareMonitor/LibreHardwareMonitor) —— 开源硬件传感器读取工具（本项目早期用它补过 CPU 温度，现已移除）
 
 **为什么没直接用 App 方案**：那些都要在手机上装 APK、在电脑上装服务、再做配对，链路长、出问题难排查；而这个方案手机端零安装，打开浏览器就能看，电脑端只有一个 Python 进程，所有数据接口都能用 `curl` 直接验证。
 

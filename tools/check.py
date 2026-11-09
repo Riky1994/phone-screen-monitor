@@ -34,27 +34,73 @@ if css.count("{") != css.count("}"):
 if "__BOOST_TOKEN__" not in html:
     problems.append("页面里缺少 __BOOST_TOKEN__ 占位符，加速接口的令牌无法注入")
 
-# 栅格区域一致性：每张卡片的 grid-area 必须在 grid-template-areas 里出现过
-tpl_areas = set()
-for blk in re.findall(r"grid-template-areas:(.*?);", css, re.S):
-    for row in re.findall(r'"([^"]*)"', blk):
-        tpl_areas.update(row.split())
-card_areas = dict(re.findall(r"\.(card-[a-z]+)\{grid-area:([a-z]+)\}", css))
+# 分页栅格一致性：每页的卡片集合必须和该页的 grid-template-areas 完全对应
+card_areas = dict(re.findall(r"\.(card-[a-z]+)\{[^}]*?grid-area:\s*([a-z]+)", css))
 if not card_areas:
     problems.append("没找到卡片 grid-area 定义")
-for cls, area in card_areas.items():
-    if area not in tpl_areas:
-        problems.append(f"{cls} 的 grid-area『{area}』不在任何 grid-template-areas 里")
-# 每种布局的模板都要覆盖全部卡片（只检查页面级模板，卡片内部还有自己的子栅格）
-for i, blk in enumerate(re.findall(r"grid-template-areas:(.*?);", css, re.S)):
+
+
+class PageMap(HTMLParser):
+    """收集每个 .page 里包含哪些 .card-*。"""
+
+    def __init__(self):
+        super().__init__()
+        self.stack = []
+        self.cur = None
+        self.pages = {}
+
+    def handle_starttag(self, tag, attrs):
+        if tag != "section":
+            return
+        d = dict(attrs)
+        cls = (d.get("class") or "").split()
+        if "page" in cls:
+            self.stack.append("page")
+            self.cur = d.get("data-page") or "?"
+            self.pages.setdefault(self.cur, set())
+        else:
+            self.stack.append("card")
+            if self.cur is not None:
+                for c in cls:
+                    if c.startswith("card-"):
+                        self.pages[self.cur].add(c)
+
+    def handle_endtag(self, tag):
+        if tag == "section" and self.stack:
+            if self.stack.pop() == "page":
+                self.cur = None
+
+
+pm = PageMap()
+pm.feed(html)
+if not pm.pages:
+    problems.append("页面里没有找到 .page 分页结构")
+
+for cls in card_areas:
+    if not any(cls in cards for cards in pm.pages.values()):
+        problems.append(f"{cls} 没有出现在任何 .page 里")
+
+tpl_by_page = {}
+for page_no, body in re.findall(
+    r'\.page\[data-page="(\d+)"\]\{([^}]*grid-template-areas:[^}]*)\}', css
+):
     names = set()
-    for row in re.findall(r'"([^"]*)"', blk):
+    for row in re.findall(r'"([^"]*)"', body):
         names.update(row.split())
-    if "hdr" not in names:
+    tpl_by_page.setdefault(page_no, []).append(names)
+
+for page_no, cards in sorted(pm.pages.items()):
+    want = {card_areas[c] for c in cards if c in card_areas}
+    if page_no not in tpl_by_page:
+        problems.append(f"第 {page_no} 页没有 grid-template-areas 定义")
         continue
-    miss = sorted(set(card_areas.values()) - names)
-    if miss:
-        problems.append(f"第 {i + 1} 套 grid-template-areas 缺少区域: {miss}")
+    for names in tpl_by_page[page_no]:
+        miss = sorted(want - names)
+        extra = sorted(names - set(card_areas.values()))
+        if miss:
+            problems.append(f"第 {page_no} 页的模板缺少区域: {miss}")
+        if extra:
+            problems.append(f"第 {page_no} 页的模板含未知区域: {extra}")
 
 # 主题变量完整性：页面用到的每个 --token，每套皮肤都必须定义（否则那套皮肤下会掉色）
 base_tokens = set()
