@@ -112,7 +112,8 @@
       "cpu   gpu   disk  proc"
       "cpu   mem   net   proc"
       "chart chart chart chart";
-    grid-template-rows:auto auto 1fr;
+    grid-template-rows:auto auto auto;
+    align-content:start;
   }
   html[data-layout="wide"] .page[data-page="2"]{
     grid-template-columns:1fr 1fr;
@@ -322,14 +323,14 @@
   .proc.ghost .c{color:var(--dim2)}
 
   /* ---------- 横屏紧凑化：一屏放下全部卡片 ---------- */
-  html[data-layout="wide"] .card{padding:9px 12px 10px;border-radius:16px}
+  html[data-layout="wide"] .card{padding:8px 11px 9px;border-radius:14px}
   html[data-layout="wide"] .lbl{font-size:10px;gap:5px}
   html[data-layout="wide"] .big b{font-size:30px}
   html[data-layout="wide"] .big{margin-top:2px}
   html[data-layout="wide"] .ring{width:112px;height:112px}
   html[data-layout="wide"] .ring-num b{font-size:30px}
   html[data-layout="wide"] .cores{height:20px;margin-top:9px}
-  html[data-layout="wide"] #chart{min-height:clamp(46px,calc(var(--eh,400px) * .16),74px);margin-top:6px}
+  html[data-layout="wide"] #chart{flex:none;height:38px;min-height:0;margin-top:4px}
   html[data-layout="wide"] .track{margin-top:7px}
   html[data-layout="wide"] .fine{margin-top:5px;font-size:10.5px}
 
