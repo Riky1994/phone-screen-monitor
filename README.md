@@ -39,7 +39,7 @@
   - 横屏不是把竖屏拉伸，而是换成 4 列并排布局：**左列 CPU 通栏（圆环 + 每核柱条），右列进程 TOP 通栏，中间两列是 GPU / 内存 / 磁盘 / 网络四个卡片，趋势图横跨底部**——一屏之内全部显示，不需要滚动
 - **分页**：三页，**只能左右滑动翻页，页面上没有任何按钮**
   - **第 1 页「系统」**：CPU 圆环与每核柱条、GPU、内存、磁盘、网络、120 秒趋势、进程 TOP（原版七板块）
-  - **第 2 页「游戏」**：温度与功耗（CPU/GPU）、帧率、显存与频率
+  - **第 2 页「游戏」**：帧率、显存与频率
   - **第 3 页「生活」**：天气、电池、系统信息
   - 翻页时底部会短暂浮出「第 2 页 · 游戏性能」，1.4 秒后自己消失
   - **不自动翻页**；横屏被旋转时按内容方向判断，不会滑反
@@ -94,22 +94,12 @@
 | 电池电量 / 充电状态 | psutil | 否 |
 | 天气 | [open-meteo](https://open-meteo.com/)（免费、无需 key），IP 粗定位所在城市 | 否 |
 | **帧率 FPS** | RTSS 共享内存（需装 MSI Afterburner / RivaTuner） | 否 |
-| **CPU 温度 / 功耗 / 风扇** | 需要可选的 LibreHardwareMonitor | 是（见下） |
 
-CPU 温度与帧率显示 `—` 是正常的：Windows 不对外开放 CPU 温度，也没有全局帧率接口，两者都需要额外工具。
+帧率显示 `—` 是正常的：Windows 没有全局帧率接口，需要 RTSS 这类工具提供。
 
-### 补上 CPU 温度 / 帧率（两个一键脚本）
+### 补上游戏帧率（一键脚本）
 
-看板里 **CPU 温度** 和 **帧率** 默认显示 `—`，因为 Windows 本身不提供这两项。项目里带了两个脚本：
-
-**`启用CPU温度.bat`**
-1. 双击运行 → 弹出 UAC，点「是」
-2. 脚本会自动下载 LibreHardwareMonitor（约 6MB，已内置则跳过）并以管理员身份启动
-3. 首次需要在它的菜单里点一次 **Options → Remote Web Server → Run**
-4. 脚本会自己轮询 8085 端口，接通后提示成功——回到看板刷新即可
-
-> 只需设置一次，LHM 会记住。之后保持它在后台（可最小化到托盘）就有温度。
-> 因为加载传感器驱动必须提权，这一步的 UAC 无法省略。
+看板里 **帧率** 默认显示 `—`，因为 Windows 本身不提供这个接口。
 
 **`启用帧率FPS.bat`**
 1. 双击运行 → 浏览器打开 MSI Afterburner 官方下载页（MSI 禁止程序自动下载，只能手动下）
@@ -165,7 +155,7 @@ CPU 温度与帧率显示 `—` 是正常的：Windows 不对外开放 CPU 温�
 - [Pitikapp](https://github.com/Pitikapp/pitikapp) —— 老手机变身 PC 副屏/监控的成熟方案：Android App + PC 端服务，可视化拖拽做仪表盘，还能当 Stream Deck 用
 - [PcHWmonitor](https://github.com/Xeakaes/PcHWmonitor) —— 单文件 Windows 服务端（内嵌 LibreHardwareMonitor）+ Jetpack Compose 安卓端，走局域网推送
 - [PixelDeck](https://github.com/danishayman/PixelDeck) —— 把旧手机做成像素风桌面看板（时钟/PC 状态/天气），走 USB
-- [LibreHardwareMonitor](https://github.com/LibreHardwareMonitor/LibreHardwareMonitor) —— 开源硬件传感器读取，自带 Web 服务器，本项目用它可选地补 CPU 温度
+- [LibreHardwareMonitor](https://github.com/LibreHardwareMonitor/LibreHardwareMonitor) —— 开源硬件传感器读取工具（本项目早期用它补过 CPU 温度，现已移除）
 
 **为什么没直接用 App 方案**：那些都要在手机上装 APK、在电脑上装服务、再做配对，链路长、出问题难排查；而这个方案手机端零安装，打开浏览器就能看，电脑端只有一个 Python 进程，所有数据接口都能用 `curl` 直接验证。
 

@@ -48,7 +48,6 @@ except Exception:
     fps_rtss = None  # type: ignore
 
 # LibreHardwareMonitor 的可选数据源（用于 CPU 温度 / 风扇 / 功耗）
-LHM_URL = "http://127.0.0.1:8085/data.json"
 NO_WINDOW = 0x08000000 if os.name == "nt" else 0
 
 LOG_DIR = BASE / "logs"
@@ -126,7 +125,7 @@ def lan_ips() -> list[str]:
 
 
 def _num(raw: str | None):
-    """把 nvidia-smi / LHM 的字符串数值转成 float，无法解析返回 None。"""
+    """把 nvidia-smi 返回的字符串数值转成 float，无法解析返回 None。"""
     if raw is None:
         return None
     s = raw.strip()
@@ -180,62 +179,6 @@ def read_gpu():
         "clockMem": _num(parts[8]),
         "fan": _num(parts[9]),
     }
-
-
-def read_lhm():
-    """可选：从本机 LibreHardwareMonitor 网页服务读取 CPU 温度 / 风扇 / 功耗。"""
-    try:
-        with urllib.request.urlopen(LHM_URL, timeout=1.0) as resp:
-            tree = json.loads(resp.read().decode("utf-8", "replace"))
-    except Exception:
-        return None
-
-    sensors: dict[str, tuple[str, float]] = {}
-
-    def walk(node):
-        if not isinstance(node, dict):
-            return
-        sid = node.get("SensorId") or ""
-        text = (node.get("Text") or "").strip()
-        val = _num(node.get("Value"))
-        if sid and val is not None:
-            sensors[sid] = (text, val)
-        for child in node.get("Children") or []:
-            walk(child)
-
-    walk(tree)
-    if not sensors:
-        return None
-
-    res = {"cpuTemp": None, "cpuPower": None, "gpuTemp": None, "gpuPower": None, "fan": None}
-
-    def pick(prefix: str, kind: str, names: tuple[str, ...]):
-        best = None
-        for sid, (text, val) in sensors.items():
-            if prefix not in sid.lower() or f"/{kind}/" not in sid.lower():
-                continue
-            if text in names:
-                return val
-            if best is None:
-                best = val
-        return best
-
-    res["cpuTemp"] = pick("/cpu", "temperature", ("CPU Package", "Core (Tctl/Tdie)", "CPU (Tctl/Tdie)", "Core Average"))
-    if res["cpuTemp"] is None:
-        res["cpuTemp"] = pick("/cpu", "temperature", ())
-    res["cpuPower"] = pick("/cpu", "power", ("Package", "CPU Package", "Package Power"))
-    res["gpuTemp"] = pick("/gpu", "temperature", ("GPU Core", "GPU Hot Spot"))
-    res["gpuPower"] = pick("/gpu", "power", ("GPU Package", "GPU Power"))
-
-    fans = [
-        (val, text)
-        for sid, (text, val) in sensors.items()
-        if "/fan/" in sid.lower() and val and val > 0
-    ]
-    if fans:
-        fans.sort(key=lambda x: ("CPU" not in x[1].upper(), -x[0]))
-        res["fan"] = fans[0][0]
-    return res
 
 
 # --------------------------------------------------------------------------- #
@@ -452,7 +395,6 @@ class Sampler:
         self._net_down = 0
         self._net_up = 0
         self._gpu = BackgroundPoller(read_gpu, 1.0, "gpu")
-        self._lhm = BackgroundPoller(read_lhm, 2.0, "lhm")
         self._procs = BackgroundPoller(make_top_reader(5), 2.0, "procs")
         self._batt = BackgroundPoller(read_battery, 10.0, "batt")
         self._weather = BackgroundPoller(read_weather, 60.0, "weather")
@@ -483,7 +425,6 @@ class Sampler:
         self._data["os"] = f"{platform.system()} {platform.release()}"
         psutil.cpu_percent(interval=None, percpu=True)  # 预热
         self._gpu.start()
-        self._lhm.start()
         self._procs.start()
         self._batt.start()
         self._weather.start()
@@ -534,12 +475,6 @@ class Sampler:
 
         gpu = self._gpu.get()
         gpu = dict(gpu) if gpu else None
-        lhm = self._lhm.get()
-        cpu_temp = lhm["cpuTemp"] if lhm else None
-        cpu_power = lhm["cpuPower"] if lhm else None
-        fan = lhm["fan"] if lhm else None
-        if gpu and lhm and lhm.get("gpuTemp"):
-            gpu["temp"] = lhm["gpuTemp"] if not gpu.get("temp") else gpu["temp"]
 
         disks = []
         if tick % 5 == 0:
@@ -579,9 +514,8 @@ class Sampler:
             "cpu": {
                 "pct": round(sum(cores) / max(len(cores), 1), 1),
                 "cores": [round(c, 1) for c in cores],
-                "temp": cpu_temp,
-                "power": cpu_power,
                 "threads": len(cores),
+                "phys": psutil.cpu_count(logical=False) or len(cores),
             },
             "mem": {
                 "total": mem.total,
@@ -596,8 +530,8 @@ class Sampler:
             "top": top,
             "procs": nproc,
             "restricted": nproc < 40,
-            "fan": fan,
-            "lhm": bool(lhm),
+            "fan": None,
+            "lhm": False,
             "battery": self._batt.get(),
             "weather": self._weather.get(),
             "fps": self._fps.get(),

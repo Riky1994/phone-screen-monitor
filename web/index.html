@@ -90,7 +90,6 @@
       "chart chart"
       "proc proc";}
   .page[data-page="2"]{grid-template-areas:
-      "temp temp"
       "fps  vram";}
   .page[data-page="3"]{grid-template-areas:
       "weather weather"
@@ -107,8 +106,9 @@
       "cpu   gpu   disk  proc"
       "cpu   mem   net   proc"
       "chart chart chart chart";}
-  html[data-layout="wide"] .page[data-page="2"]{grid-template-areas:
-      "temp  fps   vram";}
+  html[data-layout="wide"] .page[data-page="2"]{
+    grid-template-columns:1fr 1fr;
+    grid-template-areas:"fps  vram";}
   html[data-layout="wide"] .page[data-page="3"]{grid-template-areas:
       "weather battery info";}
   .card-cpu{grid-area:cpu}
@@ -118,18 +118,64 @@
   .card-net{grid-area:net}
   .card-chart{grid-area:chart}
   .card-proc{grid-area:proc}
-  .card-temp{grid-area:temp}
   .card-fps{grid-area:fps}
   .card-vram{grid-area:vram}
   .card-weather{grid-area:weather}
   .card-battery{grid-area:battery}
   .card-info{grid-area:info}
 
-  /* 两列小指标网格（温度 / 系统信息） */
+  /* 两列小指标网格（系统信息卡） */
   .statgrid{display:grid;grid-template-columns:1fr 1fr;gap:10px 14px;margin-top:10px}
   .statgrid .st{border:0;padding:0;flex-direction:column;align-items:flex-start;gap:2px}
   .statgrid .st span{font-size:10.5px}
   .statgrid .st b{font-size:16px}
+
+  /* 天气小动画：只用 transform / opacity，旧手机也不吃力 */
+  .wx-art{position:absolute;right:14px;top:26px;width:40px;height:40px;pointer-events:none;opacity:.95}
+  .wx-art svg{width:100%;height:100%;overflow:visible}
+  .wx-art g{display:none}
+  .wx-art .wx-sun circle{fill:var(--amber)}
+  .wx-art .wx-rays line{stroke:var(--amber);stroke-width:2.4;stroke-linecap:round}
+  .wx-art .wx-cloud path{fill:var(--dim);opacity:.9}
+  .wx-art .wx-drops line{stroke:var(--cyan);stroke-width:2.6;stroke-linecap:round}
+  .wx-art .wx-flake circle{fill:#cfe9ff}
+  .wx-art .wx-bolt path{fill:var(--amber)}
+
+  .card-weather[data-w="clear"] .wx-sun,
+  .card-weather[data-w="partly"] .wx-sun,
+  .card-weather[data-w="partly"] .wx-cloud,
+  .card-weather[data-w="cloud"] .wx-cloud,
+  .card-weather[data-w="fog"] .wx-cloud,
+  .card-weather[data-w="rain"] .wx-cloud,
+  .card-weather[data-w="rain"] .wx-drops,
+  .card-weather[data-w="thunder"] .wx-cloud,
+  .card-weather[data-w="thunder"] .wx-bolt,
+  .card-weather[data-w="snow"] .wx-cloud,
+  .card-weather[data-w="snow"] .wx-flake{display:block}
+
+  .card-weather[data-w="clear"] .wx-rays,
+  .card-weather[data-w="partly"] .wx-rays{
+    transform-box:view-box;transform-origin:24px 22px;animation:wxSpin 26s linear infinite;
+  }
+  @keyframes wxSpin{to{transform:rotate(360deg)}}
+
+  .card-weather[data-w="partly"] .wx-cloud,
+  .card-weather[data-w="cloud"] .wx-cloud,
+  .card-weather[data-w="fog"] .wx-cloud{animation:wxDrift 7s ease-in-out infinite}
+  @keyframes wxDrift{0%,100%{transform:translateX(-1.5px)}50%{transform:translateX(2.5px)}}
+
+  .card-weather[data-w="rain"] .wx-drops line{animation:wxFall 1.15s linear infinite}
+  .card-weather[data-w="rain"] .wx-drops line:nth-child(2){animation-delay:.38s}
+  .card-weather[data-w="rain"] .wx-drops line:nth-child(3){animation-delay:.76s}
+  @keyframes wxFall{0%{transform:translateY(-3px);opacity:0}25%{opacity:1}100%{transform:translateY(7px);opacity:0}}
+
+  .card-weather[data-w="snow"] .wx-flake circle{animation:wxSnow 3.2s ease-in-out infinite}
+  .card-weather[data-w="snow"] .wx-flake circle:nth-child(2){animation-delay:1.1s}
+  .card-weather[data-w="snow"] .wx-flake circle:nth-child(3){animation-delay:2.1s}
+  @keyframes wxSnow{0%{transform:translateY(-2px);opacity:.15}55%{opacity:1}100%{transform:translateY(6px);opacity:.15}}
+
+  .card-weather[data-w="thunder"] .wx-bolt{animation:wxFlash 2.8s ease-in-out infinite}
+  @keyframes wxFlash{0%,86%,100%{opacity:.2}89%,93%{opacity:1}}
 
   /* 换页滑入动画 */
   .page.active.slide-l{animation:pgL .24s cubic-bezier(.2,.8,.3,1)}
@@ -523,8 +569,8 @@
           <div class="ring-num"><b id="cpuPct">0</b><i>%</i></div>
         </div>
         <div class="hero-stats">
-          <div class="st"><span>温度</span><b id="cpuTemp" class="na">—</b></div>
-          <div class="st"><span>功耗</span><b id="cpuPower" class="na">—</b></div>
+          <div class="st"><span>最高核心</span><b id="cpuMax">—</b></div>
+          <div class="st"><span>核心</span><b id="cpuPhys">—</b></div>
           <div class="st"><span>线程</span><b id="cpuThreads">—</b></div>
         </div>
       </div>
@@ -595,17 +641,6 @@
       <!-- ========== 第 2 页：游戏性能 ========== -->
       <section class="page" data-page="2">
 
-    <!-- 温度与功耗 -->
-    <section class="card card-temp">
-      <div class="lbl">温度与功耗 <span class="sub" id="tempHint"></span></div>
-      <div class="statgrid">
-        <div class="st"><span>CPU 温度</span><b id="tCpuTemp" class="na">—</b></div>
-        <div class="st"><span>CPU 功耗</span><b id="tCpuPower" class="na">—</b></div>
-        <div class="st"><span>GPU 温度</span><b id="tGpuTemp" class="na">—</b></div>
-        <div class="st"><span>GPU 功耗</span><b id="tGpuPower" class="na">—</b></div>
-      </div>
-    </section>
-
     <!-- 帧率 -->
     <section class="card card-fps">
       <div class="lbl">帧率 <span class="sub" id="fpsApp"></span></div>
@@ -631,8 +666,33 @@
       <section class="page" data-page="3">
 
     <!-- 天气 -->
-    <section class="card card-weather">
+    <section class="card card-weather" id="wxCard" data-w="cloud">
       <div class="lbl">天气 <span class="sub" id="wxCity"></span></div>
+      <div class="wx-art" aria-hidden="true">
+        <svg viewBox="0 0 48 48">
+          <g class="wx-sun">
+            <circle cx="24" cy="22" r="7"/>
+            <g class="wx-rays">
+              <line x1="24" y1="6" x2="24" y2="11"/><line x1="24" y1="33" x2="24" y2="38"/>
+              <line x1="8" y1="22" x2="13" y2="22"/><line x1="35" y1="22" x2="40" y2="22"/>
+              <line x1="12" y1="10" x2="16" y2="14"/><line x1="32" y1="30" x2="36" y2="34"/>
+              <line x1="36" y1="10" x2="32" y2="14"/><line x1="16" y1="30" x2="12" y2="34"/>
+            </g>
+          </g>
+          <g class="wx-cloud">
+            <path d="M13 31h20a7 7 0 0 0 0-14 9 9 0 0 0-17 3 6 6 0 0 0-3 11z"/>
+          </g>
+          <g class="wx-drops">
+            <line x1="18" y1="34" x2="16" y2="41"/><line x1="25" y1="34" x2="23" y2="41"/>
+            <line x1="32" y1="34" x2="30" y2="41"/>
+          </g>
+          <g class="wx-flake">
+            <circle cx="18" cy="37" r="1.6"/><circle cx="25" cy="40" r="1.6"/>
+            <circle cx="32" cy="36" r="1.6"/>
+          </g>
+          <g class="wx-bolt"><path d="M25 30l-5 9h4l-2 7 8-11h-4l2-5z"/></g>
+        </svg>
+      </div>
       <div class="big"><b id="wxTemp">—</b><i>°C</i></div>
       <div class="fine"><span id="wxDesc">—</span><span id="wxFeels"></span></div>
       <div class="mini">
@@ -915,6 +975,18 @@
     }
   }
 
+  // 把天气描述归到动画类型：sun / partly / cloud / rain / snow / thunder / fog
+  function wxCategory(desc) {
+    if (!desc) return "cloud";
+    if (desc.indexOf("雷") >= 0) return "thunder";
+    if (desc.indexOf("雪") >= 0) return "snow";
+    if (desc.indexOf("雨") >= 0) return "rain";
+    if (desc.indexOf("雾") >= 0) return "fog";
+    if (desc.indexOf("晴间") >= 0) return "partly";
+    if (desc.indexOf("晴") >= 0) return "clear";
+    return "cloud";
+  }
+
   /* ---------------- 圆环 / 进度条 ---------------- */
   var ring = $("cpuRing");
   ring.style.strokeDasharray = RING_C.toFixed(2);
@@ -1054,11 +1126,10 @@
     setNum($("cpuPct"), cpu.pct, 0);
     setRing(cpu.pct);
     setText($("cpuThreads"), (cpu.threads || 0) + " 线程");
-    var ct = $("cpuTemp"), cp = $("cpuPower");
-    if (cpu.temp == null) { setText(ct, "—"); ct.classList.add("na"); }
-    else { setText(ct, Math.round(cpu.temp) + "°C"); ct.classList.remove("na"); }
-    if (cpu.power == null) { setText(cp, "—"); cp.classList.add("na"); }
-    else { setText(cp, cpu.power.toFixed(1) + " W"); cp.classList.remove("na"); }
+    setText($("cpuPhys"), (cpu.phys || 0) + " 核");
+    var peak = 0;
+    (cpu.cores || []).forEach(function (v) { if (v > peak) peak = v; });
+    setText($("cpuMax"), Math.round(peak) + "%");
     setCores(cpu.cores || []);
 
     // GPU
@@ -1135,13 +1206,7 @@
       setText($("clock"), ("0" + dd.getHours()).slice(-2) + ":" + ("0" + dd.getMinutes()).slice(-2));
     }
 
-    // ---- 第 2 页：温度 / 帧率 / 显存 ----
-    setMetric($("tCpuTemp"), cpu.temp, "°C");
-    setMetric($("tCpuPower"), cpu.power, " W", 1);
-    setMetric($("tGpuTemp"), g.temp, "°C");
-    setMetric($("tGpuPower"), g.power, " W", 1);
-    setText($("tempHint"), d.lhm ? "LHM" : "CPU 温度需 LHM");
-
+    // ---- 第 2 页：帧率 / 显存 ----
     var fps = d.fps;
     setText($("fpsVal"), fps && fps.fps != null ? String(Math.round(fps.fps)) : "—");
     setText($("fpsApp"), fps ? (fps.app || "") : "");
@@ -1164,6 +1229,8 @@
       setText($("wxFeels"), wx.feels != null ? ("体感 " + Math.round(wx.feels) + "°") : "");
       setText($("wxHum"), wx.humidity != null ? wx.humidity + "%" : "—");
       setText($("wxWind"), wx.wind != null ? Number(wx.wind).toFixed(1) + " km/h" : "—");
+      var card = $("wxCard");
+      if (card) card.setAttribute("data-w", wxCategory(wx.desc));
     }
 
     var bat = d.battery;
