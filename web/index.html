@@ -330,7 +330,7 @@
   html[data-layout="wide"] .ring{width:112px;height:112px}
   html[data-layout="wide"] .ring-num b{font-size:30px}
   html[data-layout="wide"] .cores{height:20px;margin-top:9px}
-  html[data-layout="wide"] #chart{flex:none;height:38px;min-height:38px;margin-top:4px}
+  html[data-layout="wide"] #chart{flex:none;height:40px;min-height:40px;margin-top:4px}
   html[data-layout="wide"] .track{margin-top:7px}
   html[data-layout="wide"] .fine{margin-top:5px;font-size:10.5px}
 
@@ -1126,12 +1126,12 @@
     if (!cv) return;
     var wide = document.documentElement.getAttribute("data-layout") === "wide";
     if (!wide) { cv.style.height = ""; return; }
-    cv.style.height = "38px";
+    cv.style.height = "40px";
     var page = document.querySelector('.page[data-page="1"]');
     if (!page || !page.classList.contains("active")) return;
     var extra = page.clientHeight - page.scrollHeight;
     if (extra > 4) {
-      cv.style.height = Math.min(38 + extra - 3, 132) + "px";
+      cv.style.height = Math.min(40 + extra - 3, 132) + "px";
     }
   }
 
