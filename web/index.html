@@ -86,21 +86,23 @@
   .page[data-page="1"]{grid-template-areas:
       "cpu  cpu"
       "gpu  mem"
-      "chart chart";}
-  .page[data-page="2"]{grid-template-areas:
       "disk net"
+      "chart chart"
       "proc proc";}
+  /* 第 2 页留给后续板块（温度 / FPS / 天气等），有内容后再加：
+     .page[data-page="2"]{grid-template-areas: ...} */
 
   html[data-layout="wide"] .wrap{max-width:1120px;gap:8px}
   html[data-layout="wide"] .page{
     grid-template-columns:1.1fr 1fr 1fr;
     gap:8px;align-content:stretch;
   }
-  html[data-layout="wide"] .page[data-page="1"]{grid-template-areas:
-      "cpu   gpu   mem"
-      "cpu   chart chart";}
-  html[data-layout="wide"] .page[data-page="2"]{grid-template-areas:
-      "disk  net   proc";}
+  html[data-layout="wide"] .page[data-page="1"]{
+    grid-template-columns:1.1fr 1fr 1fr 1.1fr;
+    grid-template-areas:
+      "cpu   gpu   disk  proc"
+      "cpu   mem   net   proc"
+      "chart chart chart chart";}
   .card-cpu{grid-area:cpu}
   .card-gpu{grid-area:gpu}
   .card-mem{grid-area:mem}
@@ -110,7 +112,7 @@
   .card-proc{grid-area:proc}
 
   /* ---------- 分页器 ---------- */
-  .pager{display:flex;align-items:center;justify-content:center;gap:10px;padding:2px 0 4px}
+  .pager{display:none;align-items:center;justify-content:center;gap:10px;padding:2px 0 4px}
   .pg-btn{width:30px;height:28px;font-size:15px;line-height:1;padding-bottom:2px}
   .pg-dots{display:flex;align-items:center;gap:7px;height:28px}
   .pg-dot{
@@ -485,7 +487,7 @@
 
     <main class="pages">
 
-      <!-- ========== 第 1 页：概览 ========== -->
+      <!-- ========== 第 1 页：全部七个板块（原版布局） ========== -->
       <section class="page active" data-page="1">
 
     <!-- CPU -->
@@ -547,11 +549,6 @@
       <canvas id="chart"></canvas>
     </section>
 
-      </section><!-- /第 1 页 -->
-
-      <!-- ========== 第 2 页：设备与进程 ========== -->
-      <section class="page" data-page="2">
-
     <!-- 磁盘 -->
     <section class="card card-disk">
       <div class="lbl">磁盘 <span class="sub">C:</span></div>
@@ -578,7 +575,7 @@
       <div class="procs" id="procList"></div>
     </section>
 
-      </section><!-- /第 2 页 -->
+      </section><!-- /第 1 页 -->
 
     </main>
 
@@ -1184,6 +1181,8 @@
 
   function initPager() {
     buildPager();
+    // 只有一页时不显示换页控件；以后加了第 2 页会自动出现
+    if ($("pager")) $("pager").style.display = pages.length >= 2 ? "flex" : "none";
     var saved = 0;
     try {
       saved = parseInt(localStorage.getItem("pd_page") || "0", 10) || 0;
