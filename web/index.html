@@ -115,8 +115,8 @@
       "cpu   gpu   disk  proc"
       "cpu   mem   net   proc"
       "chart chart chart chart";
-    grid-template-rows:auto auto auto;
-    align-content:start;
+    grid-template-rows:1fr 1fr auto;
+    align-content:stretch;
   }
   html[data-layout="wide"] .page[data-page="2"]{
     grid-template-columns:1fr 1fr;
@@ -327,6 +327,11 @@
 
   /* ---------- 横屏紧凑化：一屏放下全部卡片 ---------- */
   html[data-layout="wide"] .card{padding:8px 11px 9px;border-radius:14px}
+  html[data-layout="wide"] .card-mem,
+  html[data-layout="wide"] .card-disk,
+  html[data-layout="wide"] .card-net,
+  html[data-layout="wide"] .card-fps,
+  html[data-layout="wide"] .card-vram{display:flex;flex-direction:column;justify-content:center}
   html[data-layout="wide"] .lbl{font-size:10px;gap:5px}
   html[data-layout="wide"] .big b{font-size:30px}
   html[data-layout="wide"] .big{margin-top:2px}
