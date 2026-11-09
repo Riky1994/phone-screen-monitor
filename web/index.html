@@ -115,7 +115,7 @@
       "cpu   gpu   disk  proc"
       "cpu   mem   net   proc"
       "chart chart chart chart";
-    grid-template-rows:3fr 3fr 4fr;
+    grid-template-rows:5fr 5fr 6fr;
     align-content:stretch;
   }
   html[data-layout="wide"] .page[data-page="2"]{
@@ -326,19 +326,19 @@
   .proc.ghost .c{color:var(--dim2)}
 
   /* ---------- 横屏紧凑化：一屏放下全部卡片 ---------- */
-  html[data-layout="wide"] .card{padding:6px 10px 7px;border-radius:14px}
+  html[data-layout="wide"] .card{padding:7px 11px 8px;border-radius:14px}
   html[data-layout="wide"] .card-mem,
   html[data-layout="wide"] .card-disk,
   html[data-layout="wide"] .card-net,
   html[data-layout="wide"] .card-fps,
   html[data-layout="wide"] .card-vram{display:flex;flex-direction:column;justify-content:center}
   html[data-layout="wide"] .lbl{font-size:10px;gap:5px}
-  html[data-layout="wide"] .big b{font-size:27px}
+  html[data-layout="wide"] .big b{font-size:28px}
   html[data-layout="wide"] .big{margin-top:2px}
   html[data-layout="wide"] .ring{width:112px;height:112px}
   html[data-layout="wide"] .ring-num b{font-size:30px}
   html[data-layout="wide"] .cores{height:20px;margin-top:9px}
-  html[data-layout="wide"] #chart{flex:none;height:46px;min-height:46px;margin-top:4px}
+  html[data-layout="wide"] #chart{flex:1 1 0;height:0;min-height:40px;margin-top:4px}
   html[data-layout="wide"] .track{margin-top:7px}
   html[data-layout="wide"] .fine{margin-top:5px;font-size:10.5px}
 
@@ -797,7 +797,7 @@
     root.style.setProperty("--ew", (info.rot ? vh : vw) + "px");
     setText($("orientBtn"), ORIENT_LABEL[orientMode]);
     // 布局变了画布尺寸也会变
-    setTimeout(function () { fitChartHeight(); fitCanvas(); drawChart(); }, 60);
+    setTimeout(function () { fitCanvas(); drawChart(); }, 60);
   }
 
   var hintTimer = null;
@@ -1094,15 +1094,17 @@
     return "rgba(" + ((n >> 16) & 255) + "," + ((n >> 8) & 255) + "," + (n & 255) + "," + a + ")";
   }
 
-  function line(data, color, fill, alpha) {
+  // 在一条水平带内画折线：top/height 是该带的上下边界
+  function line(data, color, fill, alpha, top, height) {
     if (data.length < 2) return;
     var n = data.length, step = CW / (HIST - 1);
     var x0 = CW - (n - 1) * step;
+    var base = top + height;
     ctx.globalAlpha = (alpha == null ? 1 : alpha);
     ctx.beginPath();
     for (var i = 0; i < n; i++) {
       var x = x0 + i * step;
-      var y = CHh - (Math.max(0, Math.min(100, data[i])) / 100) * (CHh - 2) - 1;
+      var y = base - (Math.max(0, Math.min(100, data[i])) / 100) * (height - 3) - 2;
       if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
     }
     ctx.strokeStyle = color;
@@ -1111,10 +1113,10 @@
     ctx.stroke();
 
     if (fill) {
-      ctx.lineTo(x0 + (n - 1) * step, CHh);
-      ctx.lineTo(x0, CHh);
+      ctx.lineTo(x0 + (n - 1) * step, base - 1);
+      ctx.lineTo(x0, base - 1);
       ctx.closePath();
-      var g = ctx.createLinearGradient(0, 0, 0, CHh);
+      var g = ctx.createLinearGradient(0, top, 0, base);
       g.addColorStop(0, hexA(color, 0.22));
       g.addColorStop(1, hexA(color, 0));
       ctx.fillStyle = g;
@@ -1126,24 +1128,28 @@
   function drawChart() {
     if (!CW) return;
     ctx.clearRect(0, 0, CW, CHh);
-    ctx.strokeStyle = COL.grid;
+
+    // 三条独立泳道：上 CPU / 中 GPU / 下 内存
+    var lanes = 3, lh = CHh / lanes;
     ctx.lineWidth = 1;
-    for (var i = 0; i <= 4; i++) {
-      var y = Math.round(CHh * i / 4) + 0.5;
-      ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(CW, y); ctx.stroke();
+    ctx.strokeStyle = "rgba(255,255,255,.07)";
+    for (var i = 1; i < lanes; i++) {
+      var ys = Math.round(lh * i) + 0.5;
+      ctx.beginPath(); ctx.moveTo(0, ys); ctx.lineTo(CW, ys); ctx.stroke();
     }
-    line(H.mem, COL.mem, false, 0.55);
-    line(H.gpu, COL.gpu, false, 0.6);
-    line(H.cpu, COL.cpu, true, 1);
+    ctx.strokeStyle = "rgba(255,255,255,.035)";
+    for (var j = 0; j < lanes; j++) {
+      var ym = Math.round(lh * j + lh / 2) + 0.5;
+      ctx.beginPath(); ctx.moveTo(0, ym); ctx.lineTo(CW, ym); ctx.stroke();
+    }
+
+    line(H.cpu, COL.cpu, true, 1, 0, lh);
+    line(H.gpu, COL.gpu, false, 0.9, lh, lh);
+    line(H.mem, COL.mem, false, 0.9, lh * 2, lh);
   }
 
-  /* 横屏趋势图固定 46px；竖屏交还给 CSS 的弹性高度 */
-  function fitChartHeight() {
-    var cv = $("chart");
-    if (!cv) return;
-    var wide = document.documentElement.getAttribute("data-layout") === "wide";
-    cv.style.height = wide ? "46px" : "";
-  }
+
+
 
   /* ---------------- 渲染 ---------------- */
   var diskPillsKey = "";
@@ -1389,7 +1395,7 @@
     }
     // 趋势图在第 1 页，切回来时画布尺寸要从 0 恢复
     if (pages[pageIdx].getAttribute("data-page") === "1") {
-      setTimeout(function () { fitChartHeight(); fitCanvas(); drawChart(); }, 60);
+      setTimeout(function () { fitCanvas(); drawChart(); }, 60);
     }
   }
 
