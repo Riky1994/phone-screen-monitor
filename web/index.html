@@ -112,11 +112,9 @@
       "cpu   gpu   disk  proc"
       "cpu   mem   net   proc"
       "chart chart chart chart";
-    grid-template-rows:auto auto 1fr;
-    align-content:start;
+    grid-template-rows:1fr 1fr auto;
+    align-content:stretch;
   }
-  /* 横屏：让趋势条贴着屏幕底部，剩余高度全部留在它上方 */
-  html[data-layout="wide"] .page[data-page="1"] .card-chart{align-self:end}
   html[data-layout="wide"] .page[data-page="2"]{
     grid-template-columns:1fr 1fr;
     grid-template-areas:"fps  vram";}
