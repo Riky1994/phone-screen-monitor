@@ -330,7 +330,7 @@
   html[data-layout="wide"] .ring{width:112px;height:112px}
   html[data-layout="wide"] .ring-num b{font-size:30px}
   html[data-layout="wide"] .cores{height:20px;margin-top:9px}
-  html[data-layout="wide"] #chart{flex:none;height:40px;min-height:40px;margin-top:4px}
+  html[data-layout="wide"] #chart{flex:none;height:46px;min-height:46px;margin-top:4px}
   html[data-layout="wide"] .track{margin-top:7px}
   html[data-layout="wide"] .fine{margin-top:5px;font-size:10.5px}
 
@@ -1120,19 +1120,12 @@
     line(H.cpu, COL.cpu, true, 1);
   }
 
-  /* 横屏：量出真实剩余空间，把趋势图加高到刚好填满（不产生滚动） */
+  /* 横屏趋势图固定 46px；竖屏交还给 CSS 的弹性高度 */
   function fitChartHeight() {
     var cv = $("chart");
     if (!cv) return;
     var wide = document.documentElement.getAttribute("data-layout") === "wide";
-    if (!wide) { cv.style.height = ""; return; }
-    cv.style.height = "40px";
-    var page = document.querySelector('.page[data-page="1"]');
-    if (!page || !page.classList.contains("active")) return;
-    var extra = page.clientHeight - page.scrollHeight;
-    if (extra > 4) {
-      cv.style.height = Math.min(40 + extra - 3, 132) + "px";
-    }
+    cv.style.height = wide ? "46px" : "";
   }
 
   /* ---------------- 渲染 ---------------- */
