@@ -115,7 +115,7 @@
       "cpu   gpu   disk  proc"
       "cpu   mem   net   proc"
       "chart chart chart chart";
-    grid-template-rows:1fr 1fr auto;
+    grid-template-rows:3fr 3fr 4fr;
     align-content:stretch;
   }
   html[data-layout="wide"] .page[data-page="2"]{
@@ -326,14 +326,14 @@
   .proc.ghost .c{color:var(--dim2)}
 
   /* ---------- 横屏紧凑化：一屏放下全部卡片 ---------- */
-  html[data-layout="wide"] .card{padding:8px 11px 9px;border-radius:14px}
+  html[data-layout="wide"] .card{padding:6px 10px 7px;border-radius:14px}
   html[data-layout="wide"] .card-mem,
   html[data-layout="wide"] .card-disk,
   html[data-layout="wide"] .card-net,
   html[data-layout="wide"] .card-fps,
   html[data-layout="wide"] .card-vram{display:flex;flex-direction:column;justify-content:center}
   html[data-layout="wide"] .lbl{font-size:10px;gap:5px}
-  html[data-layout="wide"] .big b{font-size:30px}
+  html[data-layout="wide"] .big b{font-size:27px}
   html[data-layout="wide"] .big{margin-top:2px}
   html[data-layout="wide"] .ring{width:112px;height:112px}
   html[data-layout="wide"] .ring-num b{font-size:30px}
@@ -363,6 +363,7 @@
 
   /* 磁盘：其余盘符的胶囊在横屏收起，只留主盘和读写速度 */
   html[data-layout="wide"] .card-disk .pills{display:none}
+  html[data-layout="wide"] .card-disk .io{display:none}
   html[data-layout="wide"] .card-net .netrows{gap:4px;margin-top:6px}
 
   /* 进程列较窄，压缩数值列宽 */
