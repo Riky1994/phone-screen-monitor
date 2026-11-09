@@ -112,7 +112,7 @@
       "cpu   gpu   disk  proc"
       "cpu   mem   net   proc"
       "chart chart chart chart";
-    grid-template-rows:1fr 1fr auto;
+    grid-template-rows:auto auto 1fr;
     align-content:stretch;
   }
   html[data-layout="wide"] .page[data-page="2"]{
@@ -330,7 +330,7 @@
   html[data-layout="wide"] .ring{width:112px;height:112px}
   html[data-layout="wide"] .ring-num b{font-size:30px}
   html[data-layout="wide"] .cores{height:20px;margin-top:9px}
-  html[data-layout="wide"] #chart{flex:none;height:38px;min-height:0;margin-top:4px}
+  html[data-layout="wide"] #chart{flex:1;height:auto;min-height:38px;margin-top:4px}
   html[data-layout="wide"] .track{margin-top:7px}
   html[data-layout="wide"] .fine{margin-top:5px;font-size:10.5px}
 
