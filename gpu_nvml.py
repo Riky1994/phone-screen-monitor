@@ -46,6 +46,8 @@ def _init() -> bool:
         lib.nvmlDeviceGetPowerUsage.argtypes = [c_void_p, POINTER(c_uint)]
         lib.nvmlDeviceGetClockInfo.argtypes = [c_void_p, c_uint, POINTER(c_uint)]
         lib.nvmlDeviceGetFanSpeed.argtypes = [c_void_p, POINTER(c_uint)]
+        lib.nvmlDeviceGetGraphicsRunningProcesses_v2.argtypes = [c_void_p, POINTER(c_uint), c_void_p]
+        lib.nvmlDeviceGetGraphicsRunningProcesses_v2.restype = ctypes.c_int
         _lib, _handle = lib, handle
         return True
     except Exception:

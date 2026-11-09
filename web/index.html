@@ -89,8 +89,12 @@
       "disk net"
       "chart chart"
       "proc proc";}
-  /* 第 2 页留给后续板块（温度 / FPS / 天气等），有内容后再加：
-     .page[data-page="2"]{grid-template-areas: ...} */
+  .page[data-page="2"]{grid-template-areas:
+      "temp temp"
+      "fps  vram";}
+  .page[data-page="3"]{grid-template-areas:
+      "weather weather"
+      "battery info";}
 
   html[data-layout="wide"] .wrap{max-width:1120px;gap:8px}
   html[data-layout="wide"] .page{
@@ -103,6 +107,10 @@
       "cpu   gpu   disk  proc"
       "cpu   mem   net   proc"
       "chart chart chart chart";}
+  html[data-layout="wide"] .page[data-page="2"]{grid-template-areas:
+      "temp  fps   vram";}
+  html[data-layout="wide"] .page[data-page="3"]{grid-template-areas:
+      "weather battery info";}
   .card-cpu{grid-area:cpu}
   .card-gpu{grid-area:gpu}
   .card-mem{grid-area:mem}
@@ -110,6 +118,24 @@
   .card-net{grid-area:net}
   .card-chart{grid-area:chart}
   .card-proc{grid-area:proc}
+  .card-temp{grid-area:temp}
+  .card-fps{grid-area:fps}
+  .card-vram{grid-area:vram}
+  .card-weather{grid-area:weather}
+  .card-battery{grid-area:battery}
+  .card-info{grid-area:info}
+
+  /* 两列小指标网格（温度 / 系统信息） */
+  .statgrid{display:grid;grid-template-columns:1fr 1fr;gap:10px 14px;margin-top:10px}
+  .statgrid .st{border:0;padding:0;flex-direction:column;align-items:flex-start;gap:2px}
+  .statgrid .st span{font-size:10.5px}
+  .statgrid .st b{font-size:16px}
+
+  /* 换页滑入动画 */
+  .page.active.slide-l{animation:pgL .24s cubic-bezier(.2,.8,.3,1)}
+  .page.active.slide-r{animation:pgR .24s cubic-bezier(.2,.8,.3,1)}
+  @keyframes pgL{from{opacity:.35;transform:translateX(28px)}to{opacity:1;transform:none}}
+  @keyframes pgR{from{opacity:.35;transform:translateX(-28px)}to{opacity:1;transform:none}}
 
   /* ---------- 分页器 ---------- */
   .pager{display:none;align-items:center;justify-content:center;gap:10px;padding:2px 0 4px}
@@ -577,6 +603,76 @@
 
       </section><!-- /第 1 页 -->
 
+      <!-- ========== 第 2 页：游戏性能 ========== -->
+      <section class="page" data-page="2">
+
+    <!-- 温度与功耗 -->
+    <section class="card card-temp">
+      <div class="lbl">温度与功耗 <span class="sub" id="tempHint"></span></div>
+      <div class="statgrid">
+        <div class="st"><span>CPU 温度</span><b id="tCpuTemp" class="na">—</b></div>
+        <div class="st"><span>CPU 功耗</span><b id="tCpuPower" class="na">—</b></div>
+        <div class="st"><span>GPU 温度</span><b id="tGpuTemp" class="na">—</b></div>
+        <div class="st"><span>GPU 功耗</span><b id="tGpuPower" class="na">—</b></div>
+      </div>
+    </section>
+
+    <!-- 帧率 -->
+    <section class="card card-fps">
+      <div class="lbl">帧率 <span class="sub" id="fpsApp"></span></div>
+      <div class="big"><b id="fpsVal">—</b><i>FPS</i></div>
+      <div class="fine"><span id="fpsHint">需 RTSS</span></div>
+    </section>
+
+    <!-- 显存与频率 -->
+    <section class="card card-vram">
+      <div class="lbl">显存与频率</div>
+      <div class="big"><b id="vPct">0</b><i>%</i></div>
+      <div class="track"><div class="fill gpu" id="vBar"></div></div>
+      <div class="fine"><span id="vTxt">—</span></div>
+      <div class="mini">
+        <div class="st"><span>核心</span><b id="vClk">—</b></div>
+        <div class="st"><span>显存</span><b id="vClkMem">—</b></div>
+      </div>
+    </section>
+
+      </section><!-- /第 2 页 -->
+
+      <!-- ========== 第 3 页：生活 ========== -->
+      <section class="page" data-page="3">
+
+    <!-- 天气 -->
+    <section class="card card-weather">
+      <div class="lbl">天气 <span class="sub" id="wxCity"></span></div>
+      <div class="big"><b id="wxTemp">—</b><i>°C</i></div>
+      <div class="fine"><span id="wxDesc">—</span><span id="wxFeels"></span></div>
+      <div class="mini">
+        <div class="st"><span>湿度</span><b id="wxHum">—</b></div>
+        <div class="st"><span>风速</span><b id="wxWind">—</b></div>
+      </div>
+    </section>
+
+    <!-- 电池 -->
+    <section class="card card-battery">
+      <div class="lbl">电池 <span class="sub" id="batState"></span></div>
+      <div class="big"><b id="batPct">—</b><i>%</i></div>
+      <div class="track"><div class="fill mem" id="batBar"></div></div>
+      <div class="fine"><span id="batLeft">—</span></div>
+    </section>
+
+    <!-- 系统信息 -->
+    <section class="card card-info">
+      <div class="lbl">系统 <span class="sub" id="infoHost"></span></div>
+      <div class="statgrid">
+        <div class="st"><span>运行</span><b id="infoUp">—</b></div>
+        <div class="st"><span>系统</span><b id="infoOs">—</b></div>
+        <div class="st"><span>局域网</span><b id="infoIp">—</b></div>
+        <div class="st"><span>进程</span><b id="infoProc">—</b></div>
+      </div>
+    </section>
+
+      </section><!-- /第 3 页 -->
+
     </main>
 
     <!-- 换页控件 -->
@@ -827,6 +923,17 @@
     setText(el, txt);
   }
 
+  function setMetric(el, v, unit, decimals) {
+    if (!el) return;
+    if (v == null || isNaN(v)) {
+      setText(el, "—");
+      el.classList.add("na");
+    } else {
+      setText(el, (decimals ? Number(v).toFixed(decimals) : Math.round(v)) + unit);
+      el.classList.remove("na");
+    }
+  }
+
   /* ---------------- 圆环 / 进度条 ---------------- */
   var ring = $("cpuRing");
   ring.style.strokeDasharray = RING_C.toFixed(2);
@@ -1047,6 +1154,55 @@
       setText($("clock"), ("0" + dd.getHours()).slice(-2) + ":" + ("0" + dd.getMinutes()).slice(-2));
     }
 
+    // ---- 第 2 页：温度 / 帧率 / 显存 ----
+    setMetric($("tCpuTemp"), cpu.temp, "°C");
+    setMetric($("tCpuPower"), cpu.power, " W", 1);
+    setMetric($("tGpuTemp"), g.temp, "°C");
+    setMetric($("tGpuPower"), g.power, " W", 1);
+    setText($("tempHint"), d.lhm ? "LHM" : "CPU 温度需 LHM");
+
+    var fps = d.fps;
+    setText($("fpsVal"), fps && fps.fps != null ? String(Math.round(fps.fps)) : "—");
+    setText($("fpsApp"), fps ? (fps.app || "") : "");
+    setText($("fpsHint"), fps ? "RTSS" : "需 MSI Afterburner / RTSS");
+
+    var vramP2 = (g.memUsed != null && g.memTotal) ? (g.memUsed / g.memTotal * 100) : 0;
+    setNum($("vPct"), vramP2, 0);
+    setBar($("vBar"), vramP2);
+    setText($("vTxt"), g.memUsed != null
+      ? (g.memUsed / 1024).toFixed(1) + " / " + (g.memTotal / 1024).toFixed(1) + " GB" : "—");
+    setText($("vClk"), g.clock ? Math.round(g.clock) + " MHz" : "—");
+    setText($("vClkMem"), g.clockMem ? Math.round(g.clockMem) + " MHz" : "—");
+
+    // ---- 第 3 页：天气 / 电池 / 系统 ----
+    var wx = d.weather;
+    if (wx) {
+      setText($("wxCity"), wx.city || "");
+      setText($("wxTemp"), wx.temp != null ? String(Math.round(wx.temp)) : "—");
+      setText($("wxDesc"), wx.desc || "—");
+      setText($("wxFeels"), wx.feels != null ? ("体感 " + Math.round(wx.feels) + "°") : "");
+      setText($("wxHum"), wx.humidity != null ? wx.humidity + "%" : "—");
+      setText($("wxWind"), wx.wind != null ? Number(wx.wind).toFixed(1) + " km/h" : "—");
+    }
+
+    var bat = d.battery;
+    if (bat) {
+      setText($("batPct"), String(Math.round(bat.pct)));
+      setBar($("batBar"), bat.pct);
+      setText($("batState"), bat.plugged ? "充电中" : "放电中");
+      setText($("batLeft"), bat.plugged
+        ? "已接通电源"
+        : (bat.left != null
+            ? "剩余 " + Math.floor(bat.left / 3600) + " 小时 " + Math.floor(bat.left % 3600 / 60) + " 分"
+            : "—"));
+    }
+
+    setText($("infoHost"), d.host || "");
+    setText($("infoUp"), uptimeTxt(d.uptime).replace("已运行 ", ""));
+    setText($("infoOs"), d.os || "—");
+    setText($("infoIp"), d.ip || "—");
+    setText($("infoProc"), String(d.procs || 0));
+
     // 历史
     push(H.cpu, cpu.pct); push(H.gpu, g.util == null ? 0 : g.util); push(H.mem, m.pct);
     drawChart();
@@ -1146,11 +1302,20 @@
     });
   }
 
-  function showPage(i, manual) {
+  function showPage(i, manual, dir) {
     if (!pages.length) return;
+    var prev = pageIdx;
     pageIdx = (i % pages.length + pages.length) % pages.length;
     pages.forEach(function (p, k) {
-      p.classList.toggle("active", k === pageIdx);
+      var on = k === pageIdx;
+      p.classList.toggle("active", on);
+      if (on) {
+        p.classList.remove("slide-l", "slide-r");
+        if (prev !== pageIdx) {
+          void p.offsetWidth;  // 强制重排，保证动画能重复触发
+          p.classList.add((dir || 1) > 0 ? "slide-l" : "slide-r");
+        }
+      }
     });
     var dots = $("pgDots") ? $("pgDots").children : [];
     for (var k = 0; k < dots.length; k++) {
@@ -1194,15 +1359,47 @@
     restartAuto();
   }
 
-  $("pgPrev").addEventListener("click", function () { showPage(pageIdx - 1, true); });
-  $("pgNext").addEventListener("click", function () { showPage(pageIdx + 1, true); });
+  $("pgPrev").addEventListener("click", function () { showPage(pageIdx - 1, true, -1); });
+  $("pgNext").addEventListener("click", function () { showPage(pageIdx + 1, true, 1); });
   $("pgMode").addEventListener("click", function () {
     autoPage = !autoPage;
     try { localStorage.setItem("pd_auto", autoPage ? "1" : "0"); } catch (e) {}
     updateModeBtn();
     restartAuto();
-    showHint(autoPage ? ("自动轮播 · 每 " + AUTO_SEC + " 秒") : "手动换页");
+    showHint(autoPage ? ("自动轮播 · 每 " + AUTO_SEC + " 秒") : "手动换页：左右滑动或按箭头");
   });
+
+  /* 手势翻页：在旋转模式下要把屏幕坐标换算回内容坐标 */
+  var swipe = { x: 0, y: 0, active: false };
+
+  function contentDelta(dx, dy) {
+    var rot = document.documentElement.getAttribute("data-rotate");
+    if (rot === "90") return { dx: dy, dy: -dx };
+    if (rot === "-90") return { dx: -dy, dy: dx };
+    return { dx: dx, dy: dy };
+  }
+
+  var pagesBox = document.querySelector(".pages");
+  if (pagesBox) {
+    pagesBox.addEventListener("touchstart", function (e) {
+      if (e.touches.length !== 1) return;
+      swipe.x = e.touches[0].clientX;
+      swipe.y = e.touches[0].clientY;
+      swipe.active = true;
+    }, { passive: true });
+
+    pagesBox.addEventListener("touchend", function (e) {
+      if (!swipe.active || !e.changedTouches.length) return;
+      swipe.active = false;
+      var d = contentDelta(
+        e.changedTouches[0].clientX - swipe.x,
+        e.changedTouches[0].clientY - swipe.y
+      );
+      // 左滑（内容坐标 dx<0）翻到下一页；横向要明显大于纵向，避免误触
+      if (Math.abs(d.dx) < 45 || Math.abs(d.dx) < Math.abs(d.dy) * 1.2) return;
+      showPage(pageIdx + (d.dx < 0 ? 1 : -1), true, d.dx < 0 ? 1 : -1);
+    }, { passive: true });
+  }
 
   /* ---------------- 启动 ---------------- */
   var rt = null;
