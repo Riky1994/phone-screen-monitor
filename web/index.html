@@ -101,7 +101,10 @@
       "weather weather"
       "battery info";}
 
-  html[data-layout="wide"] .wrap{max-width:1120px;gap:8px}
+  html[data-layout="wide"] .wrap{max-width:1120px;gap:8px;justify-content:flex-start}
+  html[data-layout="wide"] .rotator{justify-content:flex-start;align-content:flex-start}
+  html[data-layout="wide"] .pages{justify-content:flex-start}
+  html[data-layout="wide"] .page.active{justify-content:flex-start;align-content:start;align-items:stretch}
   html[data-layout="wide"] .page{
     grid-template-columns:1.1fr 1fr 1fr;
     gap:8px;align-content:stretch;
@@ -372,6 +375,12 @@
   .hint{background:rgba(46,230,255,.12);border:1px solid rgba(46,230,255,.3);color:#a8ecff}
   .toast.show,.hint.show{opacity:1;transform:translateX(-50%) translateY(0)}
 
+
+  /* 调试面板：地址带 #dbg 才显示 */
+  #dbg{display:none}
+  #dbg.on{display:block;position:fixed;left:6px;top:6px;z-index:99;white-space:pre;
+    font:10px/1.35 ui-monospace,monospace;color:#6f6;background:rgba(0,0,0,.72);
+    padding:5px 7px;border-radius:6px;pointer-events:none}
   /* ================= 皮肤 ================= */
   /* 深空：原本的青/绿/琥珀 */
   html[data-theme="space"]{
@@ -735,6 +744,7 @@
 
   </div>
 
+  <div id="dbg"></div>
   <div class="toast" id="toast">连接中断 · 正在重试</div>
   <div class="hint" id="hint"></div>
 
@@ -793,6 +803,7 @@
     clearTimeout(hintTimer);
     hintTimer = setTimeout(function () { el.classList.remove("show"); }, 1400);
   }
+
 
   /* ================= 皮肤 ================= */
   var THEMES = [
@@ -1415,6 +1426,31 @@
       showPage(pageIdx + (d.dx < 0 ? 1 : -1), d.dx < 0 ? 1 : -1, true);
     }, { passive: true });
   }
+
+  /* 调试面板 */
+  (function () {
+    if (location.hash !== "#dbg") return;
+    var el = document.getElementById("dbg");
+    if (!el) return;
+    el.classList.add("on");
+    setInterval(function () {
+      var r = document.querySelector(".rotator");
+      var w = document.querySelector(".wrap");
+      var p = document.querySelector(".page.active");
+      var c = document.querySelector(".page.active .card");
+      var rb = r.getBoundingClientRect(), wb = w.getBoundingClientRect();
+      var pb = p.getBoundingClientRect(), cb = c ? c.getBoundingClientRect() : { top: -1 };
+      el.textContent = [
+        "win " + window.innerWidth + "x" + window.innerHeight,
+        "rot " + (document.documentElement.getAttribute("data-rotate") || "0") +
+          "  layout " + document.documentElement.getAttribute("data-layout"),
+        "rotator top " + Math.round(rb.top) + "  h " + Math.round(rb.height),
+        "wrap    top " + Math.round(wb.top) + "  h " + Math.round(wb.height),
+        "page    top " + Math.round(pb.top) + "  h " + Math.round(pb.height),
+        "card    top " + Math.round(cb.top)
+      ].join("\n");
+    }, 400);
+  })();
 
   /* ---------------- 启动 ---------------- */
   var rt = null;
