@@ -137,17 +137,6 @@
   @keyframes pgL{from{opacity:.35;transform:translateX(28px)}to{opacity:1;transform:none}}
   @keyframes pgR{from{opacity:.35;transform:translateX(-28px)}to{opacity:1;transform:none}}
 
-  /* ---------- 分页器 ---------- */
-  .pager{display:none;align-items:center;justify-content:center;gap:10px;padding:2px 0 4px}
-  .pg-btn{width:30px;height:28px;font-size:15px;line-height:1;padding-bottom:2px}
-  .pg-dots{display:flex;align-items:center;gap:7px;height:28px}
-  .pg-dot{
-    width:7px;height:7px;border-radius:99px;border:0;padding:0;cursor:pointer;
-    background:rgba(255,255,255,.2);transition:width .25s ease,background .25s ease,box-shadow .25s;
-  }
-  .pg-dot.on{width:20px;background:var(--cyan);box-shadow:0 0 8px var(--glow-cpu)}
-  html[data-theme] .pg-dot{background:rgba(255,255,255,.16)}
-  html[data-theme] .pg-dot.on{background:var(--cyan);box-shadow:0 0 8px var(--glow-cpu)}
 
 
   /* ---------- 顶栏 ---------- */
@@ -674,13 +663,6 @@
       </section><!-- /第 3 页 -->
 
     </main>
-
-    <!-- 换页控件 -->
-    <div class="pager" id="pager">
-      <button class="icon pg-btn" id="pgPrev" aria-label="上一页" title="上一页">‹</button>
-      <div class="pg-dots" id="pgDots"></div>
-      <button class="icon pg-btn" id="pgNext" aria-label="下一页" title="下一页">›</button>
-    </div>
 
   </div>
 
@@ -1279,26 +1261,12 @@
     if (document.visibilityState === "visible" && !wakeLock) keepAwake();
   });
 
-  /* ================= 分页（纯手动，不自动翻页） ================= */
+  /* ================= 分页（纯手动滑动，无任何按钮） ================= */
   var pages = [];
   var pageIdx = 0;
+  var PAGE_NAME = { "1": "系统状态", "2": "游戏性能", "3": "生活信息" };
 
-  function buildPager() {
-    pages = Array.prototype.slice.call(document.querySelectorAll(".page"));
-    var dots = $("pgDots");
-    if (!dots) return;
-    dots.innerHTML = "";
-    pages.forEach(function (p, i) {
-      var b = document.createElement("button");
-      b.className = "pg-dot";
-      b.setAttribute("aria-label", "第 " + (i + 1) + " 页");
-      b.title = "第 " + (i + 1) + " 页";
-      b.addEventListener("click", function () { showPage(i, i >= pageIdx ? 1 : -1); });
-      dots.appendChild(b);
-    });
-  }
-
-  function showPage(i, dir) {
+  function showPage(i, dir, announce) {
     if (!pages.length) return;
     var prev = pageIdx;
     pageIdx = (i % pages.length + pages.length) % pages.length;
@@ -1313,11 +1281,11 @@
         }
       }
     });
-    var dots = $("pgDots") ? $("pgDots").children : [];
-    for (var k = 0; k < dots.length; k++) {
-      dots[k].classList.toggle("on", k === pageIdx);
-    }
     try { localStorage.setItem("pd_page", String(pageIdx)); } catch (e) {}
+    if (announce && prev !== pageIdx) {
+      var key = pages[pageIdx].getAttribute("data-page");
+      showHint("第 " + (pageIdx + 1) + " 页 · " + (PAGE_NAME[key] || ""));
+    }
     // 趋势图在第 1 页，切回来时画布尺寸要从 0 恢复
     if (pages[pageIdx].getAttribute("data-page") === "1") {
       setTimeout(function () { fitCanvas(); drawChart(); }, 60);
@@ -1325,17 +1293,12 @@
   }
 
   function initPager() {
-    buildPager();
-    // 只有一页时不显示换页控件
-    if ($("pager")) $("pager").style.display = pages.length >= 2 ? "flex" : "none";
+    pages = Array.prototype.slice.call(document.querySelectorAll(".page"));
     var saved = 0;
     try { saved = parseInt(localStorage.getItem("pd_page") || "0", 10) || 0; } catch (e) {}
     if (saved < 0 || saved >= pages.length) saved = 0;
-    showPage(saved, 1);
+    showPage(saved, 1, false);
   }
-
-  $("pgPrev").addEventListener("click", function () { showPage(pageIdx - 1, -1); });
-  $("pgNext").addEventListener("click", function () { showPage(pageIdx + 1, 1); });
 
   /* 手势翻页：在旋转模式下要把屏幕坐标换算回内容坐标 */
   var swipe = { x: 0, y: 0, active: false };
@@ -1365,7 +1328,7 @@
       );
       // 左滑（内容坐标 dx<0）翻到下一页；横向要明显大于纵向，避免误触
       if (Math.abs(d.dx) < 45 || Math.abs(d.dx) < Math.abs(d.dy) * 1.2) return;
-      showPage(pageIdx + (d.dx < 0 ? 1 : -1), d.dx < 0 ? 1 : -1);
+      showPage(pageIdx + (d.dx < 0 ? 1 : -1), d.dx < 0 ? 1 : -1, true);
     }, { passive: true });
   }
 
