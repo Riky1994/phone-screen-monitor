@@ -680,7 +680,6 @@
       <button class="icon pg-btn" id="pgPrev" aria-label="上一页" title="上一页">‹</button>
       <div class="pg-dots" id="pgDots"></div>
       <button class="icon pg-btn" id="pgNext" aria-label="下一页" title="下一页">›</button>
-      <button class="mode-btn" id="pgMode" title="切换：自动轮播 / 手动">自动</button>
     </div>
 
   </div>
@@ -1280,12 +1279,9 @@
     if (document.visibilityState === "visible" && !wakeLock) keepAwake();
   });
 
-  /* ================= 分页 ================= */
+  /* ================= 分页（纯手动，不自动翻页） ================= */
   var pages = [];
   var pageIdx = 0;
-  var autoPage = true;
-  var AUTO_SEC = 20;
-  var pgTimer = null;
 
   function buildPager() {
     pages = Array.prototype.slice.call(document.querySelectorAll(".page"));
@@ -1297,12 +1293,12 @@
       b.className = "pg-dot";
       b.setAttribute("aria-label", "第 " + (i + 1) + " 页");
       b.title = "第 " + (i + 1) + " 页";
-      b.addEventListener("click", function () { showPage(i, true); });
+      b.addEventListener("click", function () { showPage(i, i >= pageIdx ? 1 : -1); });
       dots.appendChild(b);
     });
   }
 
-  function showPage(i, manual, dir) {
+  function showPage(i, dir) {
     if (!pages.length) return;
     var prev = pageIdx;
     pageIdx = (i % pages.length + pages.length) % pages.length;
@@ -1322,52 +1318,24 @@
       dots[k].classList.toggle("on", k === pageIdx);
     }
     try { localStorage.setItem("pd_page", String(pageIdx)); } catch (e) {}
-    if (manual) restartAuto();
     // 趋势图在第 1 页，切回来时画布尺寸要从 0 恢复
     if (pages[pageIdx].getAttribute("data-page") === "1") {
       setTimeout(function () { fitCanvas(); drawChart(); }, 60);
     }
   }
 
-  function restartAuto() {
-    clearTimeout(pgTimer);
-    if (!autoPage || pages.length < 2) return;
-    pgTimer = setTimeout(function () {
-      if (document.hidden) { restartAuto(); return; }
-      showPage(pageIdx + 1, false);
-      restartAuto();
-    }, AUTO_SEC * 1000);
-  }
-
-  function updateModeBtn() {
-    var b = $("pgMode");
-    if (b) b.textContent = autoPage ? ("自动 " + AUTO_SEC + "s") : "手动";
-  }
-
   function initPager() {
     buildPager();
-    // 只有一页时不显示换页控件；以后加了第 2 页会自动出现
+    // 只有一页时不显示换页控件
     if ($("pager")) $("pager").style.display = pages.length >= 2 ? "flex" : "none";
     var saved = 0;
-    try {
-      saved = parseInt(localStorage.getItem("pd_page") || "0", 10) || 0;
-      autoPage = localStorage.getItem("pd_auto") !== "0";
-    } catch (e) {}
+    try { saved = parseInt(localStorage.getItem("pd_page") || "0", 10) || 0; } catch (e) {}
     if (saved < 0 || saved >= pages.length) saved = 0;
-    updateModeBtn();
-    showPage(saved, false);
-    restartAuto();
+    showPage(saved, 1);
   }
 
-  $("pgPrev").addEventListener("click", function () { showPage(pageIdx - 1, true, -1); });
-  $("pgNext").addEventListener("click", function () { showPage(pageIdx + 1, true, 1); });
-  $("pgMode").addEventListener("click", function () {
-    autoPage = !autoPage;
-    try { localStorage.setItem("pd_auto", autoPage ? "1" : "0"); } catch (e) {}
-    updateModeBtn();
-    restartAuto();
-    showHint(autoPage ? ("自动轮播 · 每 " + AUTO_SEC + " 秒") : "手动换页：左右滑动或按箭头");
-  });
+  $("pgPrev").addEventListener("click", function () { showPage(pageIdx - 1, -1); });
+  $("pgNext").addEventListener("click", function () { showPage(pageIdx + 1, 1); });
 
   /* 手势翻页：在旋转模式下要把屏幕坐标换算回内容坐标 */
   var swipe = { x: 0, y: 0, active: false };
@@ -1397,7 +1365,7 @@
       );
       // 左滑（内容坐标 dx<0）翻到下一页；横向要明显大于纵向，避免误触
       if (Math.abs(d.dx) < 45 || Math.abs(d.dx) < Math.abs(d.dy) * 1.2) return;
-      showPage(pageIdx + (d.dx < 0 ? 1 : -1), true, d.dx < 0 ? 1 : -1);
+      showPage(pageIdx + (d.dx < 0 ? 1 : -1), d.dx < 0 ? 1 : -1);
     }, { passive: true });
   }
 
