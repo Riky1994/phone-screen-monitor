@@ -195,6 +195,10 @@ WMO_DESC = {
 
 _weather_cache = {"data": None, "ts": 0.0, "loc": None}
 
+# 天气定位：直接写死坐标，比 IP 定位准（IP 经常落到省会）。
+# 换地方只改这三行即可；也可以在坐标处填 None 让它退回 IP 定位。
+WEATHER_PLACE = {"name": "梅州·大埔", "lat": 24.3483, "lon": 116.6954}
+
 
 def read_battery():
     try:
@@ -215,7 +219,9 @@ def read_battery():
 
 
 def _locate():
-    """用 IP 粗略定位，失败回落到北京。"""
+    """配置里给了坐标就用配置，否则退回 IP 粗定位。"""
+    if WEATHER_PLACE.get("lat") and WEATHER_PLACE.get("lon"):
+        return WEATHER_PLACE["lat"], WEATHER_PLACE["lon"], WEATHER_PLACE.get("name") or ""
     for url in ("https://ipapi.co/json/", "http://ip-api.com/json/?fields=lat,lon,city"):
         try:
             with urllib.request.urlopen(url, timeout=6) as resp:

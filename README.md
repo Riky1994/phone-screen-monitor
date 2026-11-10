@@ -92,7 +92,7 @@
 | 网络上下行 | psutil（自动识别主网卡） | 否 |
 | 进程 TOP | 一次内核查询（`fastproc.py`） | 否 |
 | 电池电量 / 充电状态 | psutil | 否 |
-| 天气 | [open-meteo](https://open-meteo.com/)（免费、无需 key），IP 粗定位所在城市 | 否 |
+| 天气 | [open-meteo](https://open-meteo.com/)（免费、无需 key）；坐标写在 `server.py` 的 `WEATHER_PLACE`，默认**梅州·大埔** | 否 |
 | **帧率 FPS** | RTSS 共享内存（需装 MSI Afterburner / RivaTuner） | 否 |
 
 帧率显示 `—` 是正常的：Windows 没有全局帧率接口，需要 RTSS 这类工具提供。
