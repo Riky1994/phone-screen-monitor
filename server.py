@@ -19,6 +19,7 @@ import subprocess
 import sys
 import threading
 import time
+import urllib.parse
 import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -195,6 +196,13 @@ WMO_DESC = {
 
 _weather_cache = {"data": None, "ts": 0.0, "loc": None}
 
+# 天气定位：直接写死坐标，比 IP 定位准（IP 经常落到省会）。
+# 换地方只改这三行即可；也可以在坐标处填 None 让它退回 IP 定位。
+# 留空 = 自动定位（国内 IP 库能到市级，自动定位最多也就到市）。
+# 想锁定到具体某个乡镇/县，把 name 和 lat/lon 填上即可，例如：
+#   {"name": "梅州·大埔", "lat": 24.3483, "lon": 116.6954}
+WEATHER_PLACE = {"name": "", "lat": None, "lon": None}
+
 
 def read_battery():
     try:
@@ -214,19 +222,56 @@ def read_battery():
     return {"pct": round(float(b.percent)), "plugged": bool(b.power_plugged), "left": left}
 
 
+def _geocode(name: str):
+    """把城市名换成经纬度（open-meteo 免费、无 key）。"""
+    try:
+        q = name.replace("市", "").replace("县", "").replace("区", "").strip()
+        if not q:
+            return None
+        url = ("https://geocoding-api.open-meteo.com/v1/search?count=1&language=zh&format=json&name="
+               + urllib.parse.quote(q))
+        with urllib.request.urlopen(url, timeout=8) as resp:
+            d = json.loads(resp.read().decode("utf-8", "replace"))
+        r = (d.get("results") or [None])[0]
+        if r and r.get("latitude") and r.get("longitude"):
+            return float(r["latitude"]), float(r["longitude"])
+    except Exception:
+        pass
+    return None
+
+
 def _locate():
-    """用 IP 粗略定位，失败回落到北京。"""
-    for url in ("https://ipapi.co/json/", "http://ip-api.com/json/?fields=lat,lon,city"):
-        try:
-            with urllib.request.urlopen(url, timeout=6) as resp:
-                d = json.loads(resp.read().decode("utf-8", "replace"))
-            lat = d.get("latitude") or d.get("lat")
-            lon = d.get("longitude") or d.get("lon")
-            if lat and lon:
-                return float(lat), float(lon), str(d.get("city") or "")
-        except Exception:
-            continue
-    return 39.90, 116.40, ""
+    """自动定位：配置写死 → 国内 IP 库（市级，比国外库准）→ 国外库 → 兜底。"""
+    if WEATHER_PLACE.get("lat") and WEATHER_PLACE.get("lon"):
+        return WEATHER_PLACE["lat"], WEATHER_PLACE["lon"], WEATHER_PLACE.get("name") or ""
+
+    # 1) pconline：国内库，能判到市（实测 119.125.x.x → 广东省梅州市）
+    try:
+        raw = urllib.request.urlopen(
+            "https://whois.pconline.com.cn/ipJson.jsp?json=true", timeout=8
+        ).read().decode("gbk", "replace")
+        d = json.loads(raw.strip())
+        city = (d.get("city") or "").strip()
+        if city:
+            coords = _geocode(city)
+            if coords:
+                return coords[0], coords[1], city
+    except Exception:
+        pass
+
+    # 2) ip-api：国外库，只作兜底
+    try:
+        with urllib.request.urlopen(
+            "http://ip-api.com/json/?fields=status,city,lat,lon", timeout=8
+        ) as resp:
+            d = json.loads(resp.read().decode("utf-8", "replace"))
+        if d.get("status") == "success" and d.get("lat"):
+            return float(d["lat"]), float(d["lon"]), str(d.get("city") or "")
+    except Exception:
+        pass
+
+    # 3) 都没拿到就用大埔县城坐标兜底
+    return 24.3483, 116.6954, "梅州·大埔"
 
 
 def read_weather():
