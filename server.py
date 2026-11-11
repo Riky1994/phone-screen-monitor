@@ -17,6 +17,7 @@ import secrets
 import socket
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 import urllib.parse
@@ -219,7 +220,82 @@ def read_battery():
             left = int(b.secsleft)
     except Exception:
         pass
-    return {"pct": round(float(b.percent)), "plugged": bool(b.power_plugged), "left": left}
+    health = battery_health()
+    return {
+        "pct": round(float(b.percent)),
+        "plugged": bool(b.power_plugged),
+        "left": left,
+        "health": health["health"] if health else None,
+        "design_mwh": health["design"] if health else None,
+        "full_mwh": health["full"] if health else None,
+        "cycles": health["cycles"] if health else None,
+    }
+
+
+_batt_health_cache = {"ts": 0.0, "data": None}
+
+
+def battery_health():
+    """电池健康度：设计容量 vs 满充容量。
+
+    只有 powercfg 的报告能拿到真实满充容量（WMI 的 FullChargedCapacity 在这台机器上
+    单位是错的，返回 250）。报告要写临时文件、约 0.4 秒，所以缓存 6 小时。
+    """
+    now = time.time()
+    if _batt_health_cache["data"] is not None and now - _batt_health_cache["ts"] < 21600:
+        return _batt_health_cache["data"]
+
+    tmp = os.path.join(tempfile.gettempdir(), "phonedeck_batt.html")
+    try:
+        subprocess.run(
+            ["powercfg", "/batteryreport", "/output", tmp],
+            capture_output=True, timeout=25, check=False,
+        )
+        with open(tmp, "r", encoding="utf-8", errors="replace") as fh:
+            html = fh.read()
+    except Exception:
+        _batt_health_cache.update(ts=now, data=None)
+        return None
+    finally:
+        try:
+            os.remove(tmp)
+        except OSError:
+            pass
+
+    text = re.sub(r"<[^>]+>", " ", html)
+    text = re.sub(r"\s+", " ", text)
+
+    cycles = None
+    m = re.search(r"CYCLE COUNT\s+([\d,]+)", text)
+    if m:
+        cycles = int(m.group(1).replace(",", ""))
+
+    # 容量历史表：每行「起止日期 满充容量 设计容量」。
+    # 这条曲线会被驱动写坏：这台机器 2026-01 之后满充容量一直报 250 mWh（坏值），
+    # 中间还夹了一个 52,609 的离群点。所以取最近 7 条可信记录的**中位数**。
+    full = design = None
+    rows = re.findall(
+        r"\d{4}-\d{2}-\d{2}\s*-\s*\d{4}-\d{2}-\d{2}\s+([\d,]+)\s*mWh\s+([\d,]+)\s*mWh",
+        text,
+    )
+    usable = [
+        (int(a.replace(",", "")), int(b.replace(",", "")))
+        for a, b in rows
+        if int(a.replace(",", "")) >= 1000 and int(b.replace(",", "")) >= 1000
+    ]
+    if usable:
+        tail = usable[-7:]
+        vals = sorted(f for f, _ in tail)
+        full = vals[len(vals) // 2]
+        design = tail[-1][1]
+
+    health = None
+    if full and design:
+        health = max(0, min(100, round(full / design * 100)))
+
+    data = {"health": health, "design": design, "full": full, "cycles": cycles}
+    _batt_health_cache.update(ts=now, data=data if (full or cycles) else None)
+    return _batt_health_cache["data"]
 
 
 def _geocode(name: str):
