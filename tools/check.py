@@ -36,6 +36,9 @@ if "__BOOST_TOKEN__" not in html:
 
 # 分页栅格一致性：每页的卡片集合必须和该页的 grid-template-areas 完全对应
 card_areas = dict(re.findall(r"\.(card-[a-z]+)\{[^}]*?grid-area:\s*([a-z]+)", css))
+# 容器也可以占一个栅格区域（例如 .trend-row 同时装趋势图和电池卡）
+wrap_areas = set(re.findall(r"\.([a-z-]+-row)\{[^}]*?grid-area:\s*([a-z]+)", css))
+wrap_area_names = {m[1] for m in re.findall(r"\.([a-z-]+-row)\{[^}]*?grid-area:\s*([a-z]+)", css)}
 if not card_areas:
     problems.append("没找到卡片 grid-area 定义")
 
@@ -96,7 +99,7 @@ for page_no, cards in sorted(pm.pages.items()):
         continue
     for names in tpl_by_page[page_no]:
         miss = sorted(want - names)
-        extra = sorted(names - set(card_areas.values()))
+        extra = sorted(names - set(card_areas.values()) - wrap_area_names)
         if miss:
             problems.append(f"第 {page_no} 页的模板缺少区域: {miss}")
         if extra:

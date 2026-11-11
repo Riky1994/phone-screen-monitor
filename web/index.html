@@ -101,6 +101,7 @@
       "weather weather"
       "battery info";}
 
+  html[data-layout="wide"] .trend-row{grid-template-columns:minmax(0,1fr) minmax(110px,20%)}
   html[data-layout="wide"] .wrap{max-width:1120px;gap:8px;justify-content:flex-start}
   html[data-layout="wide"] .rotator{justify-content:flex-start;align-content:flex-start}
   html[data-layout="wide"] .pages{justify-content:flex-start}
@@ -128,7 +129,9 @@
   .card-mem{grid-area:mem}
   .card-disk{grid-area:disk}
   .card-net{grid-area:net}
-  .card-chart{grid-area:chart;display:flex;flex-direction:column;min-height:0}
+  .trend-row{grid-area:chart;display:grid;gap:8px;grid-template-columns:minmax(0,1fr);min-height:0}
+  .card-chart{display:flex;flex-direction:column;min-height:0}
+  .card-batt{display:flex;flex-direction:column;justify-content:center;min-height:0}
   .card-proc{grid-area:proc}
   .card-fps{grid-area:fps}
   .card-vram{grid-area:vram}
@@ -200,6 +203,14 @@
   /* ---------- 顶栏 ---------- */
   .hdr{display:flex;align-items:center;justify-content:space-between;padding:0 3px 1px;gap:8px}
   .hdr-l{display:flex;align-items:center;gap:7px;min-width:0}
+  .alert-dot{display:none;width:7px;height:7px;border-radius:50%;background:#ff4d5e;flex:none;
+    box-shadow:0 0 0 0 rgba(255,77,94,.65);animation:alertPulse 1.5s ease-out infinite}
+  .alert-dot.on{display:inline-block}
+  @keyframes alertPulse{
+    0%{box-shadow:0 0 0 0 rgba(255,77,94,.6)}
+    70%{box-shadow:0 0 0 7px rgba(255,77,94,0)}
+    100%{box-shadow:0 0 0 0 rgba(255,77,94,0)}
+  }
   .live{width:7px;height:7px;border-radius:50%;background:var(--green);box-shadow:0 0 9px var(--green);flex:none;transition:.3s}
   .live.off{background:#ff5d6c;box-shadow:0 0 9px #ff5d6c}
   .host{font-size:13px;font-weight:650;letter-spacing:.09em;white-space:nowrap}
@@ -315,7 +326,13 @@
   .legend .c{background:var(--cyan);box-shadow:0 0 6px rgba(46,230,255,.7)}
   .legend .g{background:var(--green);box-shadow:0 0 6px rgba(110,242,164,.6)}
   .legend .m{background:var(--amber);box-shadow:0 0 6px rgba(255,179,92,.6)}
-  #chart{width:100%;flex:1;min-height:84px;display:block;margin-top:8px}
+  #chart{width:100%;flex:1;min-height:62px;display:block;margin-top:8px}
+  html[data-layout="tall"] .card-batt{flex-direction:row;align-items:center;gap:10px;padding:8px 12px;min-height:52px}
+  html[data-layout="tall"] .card-batt .track{display:none}
+  html[data-layout="tall"] .card-batt .big b{font-size:20px}
+  html[data-layout="tall"] .card-batt .lbl{margin:0}
+  html[data-layout="tall"] .card-batt .fine{margin:0;flex:1}
+  html[data-layout="tall"] .card-batt .mini{margin:0}
 
   /* ---------- 进程 ---------- */
   .procs{display:flex;flex-direction:column;gap:4px;margin-top:8px}
@@ -559,6 +576,7 @@
       <div class="hdr-l">
         <span class="live" id="live"></span>
         <span class="host" id="host">—</span>
+        <span class="alert-dot" id="alertDot" title=""></span>
         <span class="uptime" id="uptime"></span>
       </div>
       <div class="hdr-r">
@@ -621,18 +639,28 @@
       <div class="fine"><span id="memTxt">—</span><span id="memFree"></span></div>
     </section>
 
-    <!-- 趋势 -->
-    <section class="card card-chart">
-      <div class="lbl">趋势
-        <span class="sub">近 120 秒</span>
-        <div class="legend">
-          <em><i class="c"></i>CPU</em>
-          <em><i class="g"></i>GPU</em>
-          <em><i class="m"></i>内存</em>
+    <!-- 趋势 + 电池健康 -->
+    <div class="trend-row">
+      <section class="card card-chart">
+        <div class="lbl">趋势
+          <span class="sub">近 120 秒</span>
+          <div class="legend">
+            <em><i class="c"></i>CPU</em>
+            <em><i class="g"></i>GPU</em>
+            <em><i class="m"></i>内存</em>
+          </div>
         </div>
-      </div>
-      <canvas id="chart"></canvas>
-    </section>
+        <canvas id="chart"></canvas>
+      </section>
+
+      <section class="card card-batt">
+        <div class="lbl">电池健康</div>
+        <div class="big"><b id="battHealth">—</b><i>%</i></div>
+        <div class="track"><i id="battBar" style="width:0%"></i></div>
+        <div class="fine"><span id="battCap">—</span></div>
+        <div class="mini"><div class="st"><span>循环</span><b id="battCycles">—</b></div></div>
+      </section>
+    </div>
 
     <!-- 磁盘 -->
     <section class="card card-disk">
@@ -1154,6 +1182,44 @@
   /* ---------------- 渲染 ---------------- */
   var diskPillsKey = "";
 
+  /* 告警：CPU 持续 >90% / GPU 温度 >85°C / 磁盘剩余 <10GB */
+  var alertState = { cpuSince: 0, warned: false };
+
+  function updateAlerts(d) {
+    var reasons = [];
+    var cpu = (d.cpu && d.cpu.pct) || 0;
+    if (cpu > 90) {
+      if (!alertState.cpuSince) alertState.cpuSince = Date.now();
+      if (Date.now() - alertState.cpuSince >= 30000) reasons.push("CPU 持续 >90%");
+    } else {
+      alertState.cpuSince = 0;
+    }
+
+    var gt = d.gpu && d.gpu.temp;
+    if (gt != null && gt > 85) reasons.push("GPU " + Math.round(gt) + "°C");
+
+    (d.disk || []).forEach(function (x) {
+      if (!x || !x.total) return;
+      var free = (x.total - x.used) / 1073741824;
+      if (free < 10) reasons.push(x.mount + " 剩 " + free.toFixed(1) + "G");
+    });
+
+    var el = $("alertDot");
+    if (!el) return;
+    if (reasons.length) {
+      el.classList.add("on");
+      el.title = "告警：" + reasons.join(" · ");
+      if (!alertState.warned) {
+        alertState.warned = true;
+        showHint("⚠ " + reasons.join(" · "));
+      }
+    } else {
+      el.classList.remove("on");
+      el.title = "";
+      alertState.warned = false;
+    }
+  }
+
   function render(d) {
     // 顶栏
     setText($("host"), d.host || "PC");
@@ -1284,6 +1350,22 @@
             ? "剩余 " + Math.floor(bat.left / 3600) + " 小时 " + Math.floor(bat.left % 3600 / 60) + " 分"
             : "—"));
     }
+
+    // 第 1 页：电池健康（设计容量 vs 满充容量）
+    var bh = bat && bat.health;
+    setText($("battHealth"), bh == null ? "—" : String(bh));
+    var bb = $("battBar");
+    if (bb) bb.style.width = (bh == null ? 0 : Math.max(0, Math.min(100, bh))) + "%";
+    setText($("battCap"), (bat && bat.full_mwh && bat.design_mwh)
+      ? ("满充 " + (bat.full_mwh / 1000).toFixed(1) + " / 设计 " + Math.round(bat.design_mwh / 1000) + " Wh")
+      : "读不到电池报告");
+    setText($("battCycles"), (bat && bat.cycles != null) ? (bat.cycles + " 次") : "—");
+    if (bat && bat.health != null && bb) {
+      bb.style.background = bat.health >= 80 ? "var(--green)"
+        : bat.health >= 60 ? "var(--amber)" : "#ff4d5e";
+    }
+
+    updateAlerts(d);
 
     setText($("infoHost"), d.host || "");
     setText($("infoUp"), uptimeTxt(d.uptime).replace("已运行 ", ""));
