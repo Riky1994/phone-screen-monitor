@@ -1437,6 +1437,51 @@
       if (Math.abs(d.dx) < 45 || Math.abs(d.dx) < Math.abs(d.dy) * 1.2) return;
       showPage(pageIdx + (d.dx < 0 ? 1 : -1), d.dx < 0 ? 1 : -1, true);
     }, { passive: true });
+
+    /* 电脑端：鼠标按住拖动也能翻页（触屏仍走上面的触摸事件） */
+    var drag = { x: 0, y: 0, on: false, moved: false };
+    pagesBox.addEventListener("mousedown", function (e) {
+      if (e.button !== 0) return;
+      // 允许拖卡片，但不影响按钮/链接的点击
+      if (e.target.closest("button, a, input, select, textarea")) return;
+      drag.x = e.clientX; drag.y = e.clientY;
+      drag.on = true; drag.moved = false;
+    });
+    window.addEventListener("mousemove", function (e) {
+      if (!drag.on) return;
+      if (Math.abs(e.clientX - drag.x) > 6 || Math.abs(e.clientY - drag.y) > 6) drag.moved = true;
+    });
+    window.addEventListener("mouseup", function (e) {
+      if (!drag.on) return;
+      drag.on = false;
+      var d = contentDelta(e.clientX - drag.x, e.clientY - drag.y);
+      if (Math.abs(d.dx) < 60 || Math.abs(d.dx) < Math.abs(d.dy) * 1.2) return;
+      showPage(pageIdx + (d.dx < 0 ? 1 : -1), d.dx < 0 ? 1 : -1, true);
+    });
+
+    /* 电脑端：按左右方向键翻页 */
+    window.addEventListener("keydown", function (e) {
+      if (e.key === "ArrowRight" || e.key === "PageDown") {
+        showPage(pageIdx + 1, 1, true); e.preventDefault();
+      } else if (e.key === "ArrowLeft" || e.key === "PageUp") {
+        showPage(pageIdx - 1, -1, true); e.preventDefault();
+      } else if (e.key === "Home") {
+        showPage(0, -1, true); e.preventDefault();
+      } else if (e.key === "End") {
+        showPage(pages.length - 1, 1, true); e.preventDefault();
+      }
+    });
+
+    /* 电脑端：触控板横向滚动也能翻页 */
+    var wheelLock = 0;
+    pagesBox.addEventListener("wheel", function (e) {
+      if (Math.abs(e.deltaX) <= Math.abs(e.deltaY)) return;
+      var now = Date.now();
+      if (now - wheelLock < 500) return;
+      if (Math.abs(e.deltaX) < 20) return;
+      wheelLock = now;
+      showPage(pageIdx + (e.deltaX > 0 ? 1 : -1), e.deltaX > 0 ? 1 : -1, true);
+    }, { passive: true });
   }
 
   /* 调试面板 */
