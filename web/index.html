@@ -35,6 +35,7 @@
     --green:#6ef2a4;
     --amber:#ffb35c;
     --violet:#b48cff;
+    --amb:.10;
   }
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
   html,body{margin:0;min-height:100%}
@@ -241,7 +242,7 @@
 
   /* ---------- 卡片 ---------- */
   .card{
-    position:relative;overflow:hidden;
+    position:relative;overflow:hidden;z-index:0;
     background:linear-gradient(158deg,rgba(255,255,255,.058),rgba(255,255,255,.016));
     border:1px solid var(--line);
     border-radius:20px;
@@ -253,6 +254,11 @@
     display:flex;align-items:baseline;gap:7px;
     font-size:11px;font-weight:600;letter-spacing:.15em;text-transform:uppercase;color:var(--dim);
   }
+  /* 卡片迷你走势：铺在卡片底部当纹理，内容浮在它上面 */
+  .spark{position:absolute;left:0;right:0;bottom:0;width:100%;height:44%;
+    opacity:.32;pointer-events:none;z-index:-1}
+  .spark path{fill:none;stroke:currentColor;stroke-width:1.3;stroke-linejoin:round;
+    stroke-linecap:round;vector-effect:non-scaling-stroke}
   .sub{font-size:10.5px;font-weight:400;letter-spacing:0;text-transform:none;color:var(--dim2);
        overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;flex:1}
   .big{display:flex;align-items:baseline;gap:3px;margin-top:5px}
@@ -294,6 +300,9 @@
   .fill.gpu{background:linear-gradient(90deg,#2fbf78,var(--green));box-shadow:0 0 10px rgba(110,242,164,.35)}
   .fill.mem{background:linear-gradient(90deg,#f08a2e,var(--amber));box-shadow:0 0 10px rgba(255,179,92,.3)}
   .fill.disk{background:linear-gradient(90deg,#8b5cf6,var(--violet))}
+  /* 电池健康进度条（内部是裸 i 元素，之前没有样式所以看不见） */
+  .track i{display:block;height:100%;width:0;border-radius:99px;background:var(--cyan);
+    transition:width .45s ease-out}
 
   .mini{display:flex;gap:14px;margin-top:8px}
   .mini .st{border:0;padding:0;flex:1;flex-direction:column;align-items:flex-start;gap:1px}
@@ -540,6 +549,10 @@
     background-size:34px 34px;
   }
   body::after{background:repeating-linear-gradient(180deg,var(--scan) 0 1px,transparent 1px 3px)}
+  /* 环境光：透明度跟着整机负载走（JS 每秒更新 --amb） */
+  .ambient{position:fixed;inset:0;z-index:0;pointer-events:none;
+    background:radial-gradient(1100px 600px at 50% 118%,var(--glow-cpu,rgba(46,230,255,.55)),transparent 62%);
+    opacity:var(--amb,.10);transition:opacity 1s ease-out;will-change:opacity}
 
   /* ---------- 皮肤面板 ---------- */
   .sheet{
@@ -569,6 +582,7 @@
 </style>
 </head>
 <body>
+<div class="ambient"></div>
 <div class="rotator">
   <div class="wrap">
 
@@ -1012,10 +1026,48 @@
 
   function setText(el, txt) { if (el && el.textContent !== txt) el.textContent = txt; }
 
+  /* 数字滚动：值变化时从当前显示值平滑滚到目标值（只跑 rAF，不重排） */
+  var tweenState = typeof WeakMap === "function" ? new WeakMap() : null;
+  var TWEEN_MS = 430;
+
+  function numText(v, dec) {
+    return (dec === 0) ? intOf(v) : fixed(v, dec == null ? 0 : dec);
+  }
+
   function setNum(el, v, dec) {
     if (!el) return;
-    var txt = (dec === 0) ? intOf(v) : fixed(v, dec == null ? 0 : dec);
-    setText(el, txt);
+    var target = Number(v);
+    if (v == null || isNaN(target)) { setText(el, "—"); return; }
+    if (!tweenState) { setText(el, numText(target, dec)); return; }
+
+    var d = (dec == null ? 0 : dec);
+    var st = tweenState.get(el);
+    if (!st) {
+      st = { shown: target, target: target, raf: 0 };
+      tweenState.set(el, st);
+      setText(el, numText(target, d));
+      return;
+    }
+    st.target = target;
+    if (st.raf) return;  // 已有动画在跑，它会读到最新的 target
+
+    var from = st.shown;
+    if (Math.abs(target - from) < 0.01) return;
+    var t0 = (performance.now ? performance.now() : Date.now());
+
+    function step(now) {
+      var k = Math.min(1, (now - t0) / TWEEN_MS);
+      var e = 1 - Math.pow(1 - k, 3);           // ease-out cubic
+      st.shown = from + (st.target - from) * e;
+      setText(el, numText(st.shown, d));
+      if (k < 1) {
+        st.raf = requestAnimationFrame(step);
+      } else {
+        st.shown = st.target;
+        st.raf = 0;
+      }
+    }
+    st.raf = requestAnimationFrame(step);
   }
 
   function setMetric(el, v, unit, decimals) {
@@ -1179,6 +1231,59 @@
 
 
 
+  /* ---------------- 卡片迷你走势 ---------------- */
+  var sparks = {};
+
+  // 纯函数：把一组数值转成 SVG 路径（窗口 60 格，右对齐，按窗口峰值自适应缩放）
+  function sparkPath(data, w, h) {
+    var n = data.length;
+    if (n < 2) return "";
+    var peak = 0;
+    for (var i = 0; i < n; i++) { if (data[i] > peak) peak = data[i]; }
+    var scale = Math.max(10, peak * 1.08);
+    var step = w / 59;
+    var x0 = w - (n - 1) * step;
+    var d = "";
+    for (var j = 0; j < n; j++) {
+      var x = x0 + j * step;
+      var y = h - 1 - (Math.min(data[j], scale) / scale) * (h - 2);
+      d += (j ? "L" : "M") + x.toFixed(1) + " " + y.toFixed(1);
+    }
+    return d;
+  }
+
+  function initSpark(cardSel, key, color) {
+    var card = document.querySelector(cardSel);
+    if (!card || card.querySelector(".spark")) return;
+    var NS = "http://www.w3.org/2000/svg";
+    var svg = document.createElementNS(NS, "svg");
+    svg.setAttribute("class", "spark");
+    svg.setAttribute("viewBox", "0 0 100 30");
+    svg.setAttribute("preserveAspectRatio", "none");
+    svg.style.color = color;
+    var p = document.createElementNS(NS, "path");
+    svg.appendChild(p);
+    card.appendChild(svg);
+    sparks[key] = { path: p, data: [] };
+  }
+
+  function initSparks() {
+    initSpark(".card-gpu", "gpu", "var(--green)");
+    initSpark(".card-mem", "mem", "var(--amber)");
+    initSpark(".card-disk", "disk", "var(--violet)");
+    initSpark(".card-net", "net", "var(--cyan)");
+    initSpark(".card-fps", "fps", "var(--green)");
+    initSpark(".card-vram", "vram", "var(--violet)");
+  }
+
+  function pushSpark(key, v) {
+    var s = sparks[key];
+    if (!s || v == null || isNaN(v)) return;
+    s.data.push(Math.max(0, Math.min(100, v)));
+    if (s.data.length > 60) s.data.shift();
+    if (s.data.length < 2) return;
+    s.path.setAttribute("d", sparkPath(s.data, 100, 30));
+  }
   /* ---------------- 渲染 ---------------- */
   var diskPillsKey = "";
 
@@ -1364,6 +1469,18 @@
       bb.style.background = bat.health >= 80 ? "var(--green)"
         : bat.health >= 60 ? "var(--amber)" : "#ff4d5e";
     }
+
+    // 环境光：整机负载决定背景辉光强弱
+    var load = Math.max(cpu.pct || 0, g.util || 0) / 100;
+    document.documentElement.style.setProperty("--amb", (0.05 + load * 0.26).toFixed(3));
+
+    // 迷你走势
+    pushSpark("gpu", g.util);
+    pushSpark("mem", m.pct);
+    pushSpark("disk", sysDisk ? sysDisk.pct : null);
+    pushSpark("net", Math.max(net.down || 0, net.up || 0) / 1048576);
+    pushSpark("fps", fps && fps.fps != null ? Math.min(100, fps.fps / 1.44) : 0);
+    pushSpark("vram", vramPct);
 
     updateAlerts(d);
 
@@ -1590,6 +1707,8 @@
       ].join("\n");
     }, 400);
   })();
+
+  initSparks();
 
   /* ---------------- 启动 ---------------- */
   var rt = null;
