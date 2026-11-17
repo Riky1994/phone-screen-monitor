@@ -224,6 +224,19 @@ def install_timestamp():
     return _install_ts
 
 
+def hardware_first():
+    """这台机器（硬件）第一次被使用的时间。
+
+    没有“首次开机”这种系统记录，退而求其次用电池容量历史里最早的一条：
+    那是电池第一次被充电/记录的时刻，基本等于整机首次使用。
+    读不到（比如台式机没电池）就返回 None。
+    """
+    h = _batt_health_cache.get("data")
+    if not h:
+        h = battery_health()
+    return (h or {}).get("first") or None
+
+
 def read_battery():
     try:
         b = psutil.sensors_battery()
@@ -248,6 +261,7 @@ def read_battery():
         "design_mwh": health["design"] if health else None,
         "full_mwh": health["full"] if health else None,
         "cycles": health["cycles"] if health else None,
+        "first_ts": health["first"] if health else None,
     }
 
 
@@ -292,27 +306,33 @@ def battery_health():
     # 容量历史表：每行「起止日期 满充容量 设计容量」。
     # 这条曲线会被驱动写坏：这台机器 2026-01 之后满充容量一直报 250 mWh（坏值），
     # 中间还夹了一个 52,609 的离群点。所以取最近 7 条可信记录的**中位数**。
+    # 同时把最早一条记录的起始日期留下来，当作「这台机器第一次被用」的时间。
     full = design = None
+    first_us = None
     rows = re.findall(
-        r"\d{4}-\d{2}-\d{2}\s*-\s*\d{4}-\d{2}-\d{2}\s+([\d,]+)\s*mWh\s+([\d,]+)\s*mWh",
+        r"(\d{4}-\d{2}-\d{2})\s*-\s*\d{4}-\d{2}-\d{2}\s+([\d,]+)\s*mWh\s+([\d,]+)\s*mWh",
         text,
     )
-    usable = [
-        (int(a.replace(",", "")), int(b.replace(",", "")))
-        for a, b in rows
-        if int(a.replace(",", "")) >= 1000 and int(b.replace(",", "")) >= 1000
-    ]
+    usable = []
+    for start, a, b in rows:
+        fv, dv = int(a.replace(",", "")), int(b.replace(",", ""))
+        if fv >= 1000 and dv >= 1000:
+            usable.append((start, fv, dv))
     if usable:
+        try:
+            first_us = time.mktime(time.strptime(usable[0][0], "%Y-%m-%d"))
+        except Exception:
+            first_us = None
         tail = usable[-7:]
-        vals = sorted(f for f, _ in tail)
+        vals = sorted(f for _, f, _ in tail)
         full = vals[len(vals) // 2]
-        design = tail[-1][1]
+        design = tail[-1][2]
 
     health = None
     if full and design:
         health = max(0, min(100, round(full / design * 100)))
 
-    data = {"health": health, "design": design, "full": full, "cycles": cycles}
+    data = {"health": health, "design": design, "full": full, "cycles": cycles, "first": first_us}
     _batt_health_cache.update(ts=now, data=data if (full or cycles) else None)
     return _batt_health_cache["data"]
 
@@ -659,6 +679,8 @@ class Sampler:
             "since": {
                 "ts": install_timestamp() or None,
                 "days": (int((now - install_timestamp()) // 86400) if install_timestamp() else None),
+                "hw_ts": hardware_first(),
+                "hw_days": (int((now - hardware_first()) // 86400) if hardware_first() else None),
             },
             "cpu": {
                 "pct": round(sum(cores) / max(len(cores), 1), 1),

@@ -729,14 +729,14 @@
       </div>
     </section>
 
-    <!-- 系统年龄 -->
+    <!-- 机器年龄 -->
     <section class="card card-days">
-      <div class="lbl">系统年龄 <span class="sub" id="daysSub">从装机算起</span></div>
+      <div class="lbl">机器年龄 <span class="sub" id="daysSub">—</span></div>
       <div class="big"><b id="daysVal">—</b><i>天</i></div>
       <div class="fine"><span id="daysTxt">—</span></div>
       <div class="mini">
-        <div class="st"><span>装机</span><b id="daysDate">—</b></div>
-        <div class="st"><span>折算</span><b id="daysSpan">—</b></div>
+        <div class="st"><span>系统</span><b id="daysSys">—</b></div>
+        <div class="st"><span>系统天数</span><b id="daysSpan">—</b></div>
       </div>
     </section>
 
@@ -1029,6 +1029,16 @@
   }
 
   function gb(bytes) { return bytes ? bytes / 1073741824 : 0; }
+
+  function fmtDay(ts) {
+    var d = new Date(ts * 1000);
+    return d.getFullYear() + "-" + ("0" + (d.getMonth() + 1)).slice(-2) + "-" + ("0" + d.getDate()).slice(-2);
+  }
+
+  function spanTxt(days) {
+    var y = Math.floor(days / 365), m = Math.floor((days % 365) / 30);
+    return (y ? y + " 年 " : "") + m + " 个月";
+  }
 
   function speed(v) {
     if (!v || isNaN(v)) return ["0", "B/s"];
@@ -1431,19 +1441,19 @@
       setText($("clock"), ("0" + dd.getHours()).slice(-2) + ":" + ("0" + dd.getMinutes()).slice(-2));
     }
 
-    // ---- 第 2 页：系统年龄 ----
+    // ---- 第 2 页：机器年龄（硬件） + 系统安装天数 ----
     var since = d.since || {};
-    if (since.days != null && since.ts) {
-      setNum($("daysVal"), since.days, 0);
-      var sd = new Date(since.ts * 1000);
-      var sdd = sd.getFullYear() + "-" + ("0" + (sd.getMonth() + 1)).slice(-2) + "-" + ("0" + sd.getDate()).slice(-2);
-      setText($("daysDate"), sdd);
-      var yy = Math.floor(since.days / 365), mm = Math.floor((since.days % 365) / 30);
-      setText($("daysSpan"), (yy ? yy + " 年 " : "") + mm + " 个月");
-      setText($("daysTxt"), "自 " + sdd + " 起");
+    var hwDays = since.hw_days != null ? since.hw_days : since.days;
+    var hwTs = since.hw_ts || since.ts;
+    if (hwDays != null && hwTs) {
+      setNum($("daysVal"), hwDays, 0);
+      setText($("daysSub"), "硬件自 " + fmtDay(hwTs));
+      setText($("daysTxt"), "折算 " + spanTxt(hwDays));
+      setText($("daysSys"), since.ts ? fmtDay(since.ts) : "—");
+      setText($("daysSpan"), since.days != null ? since.days + " 天" : "—");
     } else {
       setText($("daysVal"), "—");
-      setText($("daysTxt"), "读不到安装时间");
+      setText($("daysTxt"), "读不到时间");
     }
 
     // ---- 第 2 页：帧率 / 显存 ----
