@@ -164,6 +164,19 @@
 [2026-11-11 16:35:27] PhoneDeck 已启动
 [2026-11-11 16:35:35] 守护：重启成功
 ```
+## 推送到 GitHub
+
+仓库已经配好 **SSH**，推送不需要任何 token / 密码：
+
+```bash
+git add -A && git commit -m "改了点什么" && git push
+```
+
+或者直接双击 **`上传到GitHub.bat`**——它会自动暂存、提交（没写信息就用时间戳）、推送。
+
+- 远端：`git@github.com:Riky1994/phone-screen-monitor.git`
+- 用的是 Windows 自带 OpenSSH，密钥在 `%USERPROFILE%\.ssh\id_ed25519`
+- 换机器时要重新生成密钥并把公钥加到 GitHub → Settings → SSH and GPG keys
 ## 五、一键加速
 
 看板右上角有个 **`⚡加速`** 按钮，点一下会整理本机各进程的内存工作集，把闲置内存页推回系统备用列表，立刻释放物理内存。
