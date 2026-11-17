@@ -97,7 +97,8 @@
     grid-template-rows:auto auto auto 1fr auto;
   }
   .page[data-page="2"]{grid-template-areas:
-      "fps  vram";}
+      "fps  vram"
+      "days days";}
   .page[data-page="3"]{grid-template-areas:
       "weather weather"
       "battery info";}
@@ -121,8 +122,8 @@
     align-content:stretch;
   }
   html[data-layout="wide"] .page[data-page="2"]{
-    grid-template-columns:1fr 1fr;
-    grid-template-areas:"fps  vram";}
+    grid-template-columns:1fr 1fr 1fr;
+    grid-template-areas:"fps  vram days";}
   html[data-layout="wide"] .page[data-page="3"]{grid-template-areas:
       "weather battery info";}
   .card-cpu{grid-area:cpu}
@@ -136,6 +137,7 @@
   .card-proc{grid-area:proc}
   .card-fps{grid-area:fps}
   .card-vram{grid-area:vram}
+  .card-days{grid-area:days}
   .card-weather{grid-area:weather}
   .card-battery{grid-area:battery}
   .card-info{grid-area:info}
@@ -357,7 +359,8 @@
   html[data-layout="wide"] .card-disk,
   html[data-layout="wide"] .card-net,
   html[data-layout="wide"] .card-fps,
-  html[data-layout="wide"] .card-vram{display:flex;flex-direction:column;justify-content:center}
+  html[data-layout="wide"] .card-vram,
+  html[data-layout="wide"] .card-days{display:flex;flex-direction:column;justify-content:center}
   html[data-layout="wide"] .lbl{font-size:10px;gap:5px}
   html[data-layout="wide"] .big b{font-size:28px}
   html[data-layout="wide"] .big{margin-top:2px}
@@ -723,6 +726,17 @@
       <div class="mini">
         <div class="st"><span>核心</span><b id="vClk">—</b></div>
         <div class="st"><span>显存</span><b id="vClkMem">—</b></div>
+      </div>
+    </section>
+
+    <!-- 系统年龄 -->
+    <section class="card card-days">
+      <div class="lbl">系统年龄 <span class="sub" id="daysSub">从装机算起</span></div>
+      <div class="big"><b id="daysVal">—</b><i>天</i></div>
+      <div class="fine"><span id="daysTxt">—</span></div>
+      <div class="mini">
+        <div class="st"><span>装机</span><b id="daysDate">—</b></div>
+        <div class="st"><span>折算</span><b id="daysSpan">—</b></div>
       </div>
     </section>
 
@@ -1415,6 +1429,21 @@
     if (d.t) {
       var dd = new Date(d.t * 1000);
       setText($("clock"), ("0" + dd.getHours()).slice(-2) + ":" + ("0" + dd.getMinutes()).slice(-2));
+    }
+
+    // ---- 第 2 页：系统年龄 ----
+    var since = d.since || {};
+    if (since.days != null && since.ts) {
+      setNum($("daysVal"), since.days, 0);
+      var sd = new Date(since.ts * 1000);
+      var sdd = sd.getFullYear() + "-" + ("0" + (sd.getMonth() + 1)).slice(-2) + "-" + ("0" + sd.getDate()).slice(-2);
+      setText($("daysDate"), sdd);
+      var yy = Math.floor(since.days / 365), mm = Math.floor((since.days % 365) / 30);
+      setText($("daysSpan"), (yy ? yy + " 年 " : "") + mm + " 个月");
+      setText($("daysTxt"), "自 " + sdd + " 起");
+    } else {
+      setText($("daysVal"), "—");
+      setText($("daysTxt"), "读不到安装时间");
     }
 
     // ---- 第 2 页：帧率 / 显存 ----

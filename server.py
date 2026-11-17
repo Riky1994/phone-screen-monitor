@@ -205,6 +205,25 @@ _weather_cache = {"data": None, "ts": 0.0, "loc": None}
 WEATHER_PLACE = {"name": "", "lat": None, "lon": None}
 
 
+_install_ts = None
+
+
+def install_timestamp():
+    """系统安装（激活）时间：注册表 InstallDate，Unix 秒。只读一次。"""
+    global _install_ts
+    if _install_ts is not None:
+        return _install_ts
+    try:
+        import winreg
+        with winreg.OpenKey(
+            winreg.HKEY_LOCAL_MACHINE, r"SOFTWARE\Microsoft\Windows NT\CurrentVersion"
+        ) as key:
+            _install_ts = int(winreg.QueryValueEx(key, "InstallDate")[0])
+    except Exception:
+        _install_ts = 0
+    return _install_ts
+
+
 def read_battery():
     try:
         b = psutil.sensors_battery()
@@ -637,6 +656,10 @@ class Sampler:
             "os": self._data["os"],
             "boot": self._data["boot"],
             "uptime": round(now - self._data["boot"], 1),
+            "since": {
+                "ts": install_timestamp() or None,
+                "days": (int((now - install_timestamp()) // 86400) if install_timestamp() else None),
+            },
             "cpu": {
                 "pct": round(sum(cores) / max(len(cores), 1), 1),
                 "cores": [round(c, 1) for c in cores],
